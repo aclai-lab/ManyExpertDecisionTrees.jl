@@ -6,12 +6,13 @@ using DecisionTree
 using FuzzyLogic
 using Statistics
 
-export ManyExpertDecisionTree
+export ManyExpertDecisionTree, depth
 
 include("many-expert-decision-tree.jl")
 
 export manify
 
 include("manify.jl")
+include("utils.jl")
 
 end
