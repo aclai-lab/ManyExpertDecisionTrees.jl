@@ -4,10 +4,14 @@ using SoleLogics
 using SoleLogics.ManyValuedLogics
 using DecisionTree
 using FuzzyLogic
+using Statistics
 
-export Leaf, Node, ManyExpertDecisionTree
+export ManyExpertDecisionTree
 
-# Include submodules/files
 include("many-expert-decision-tree.jl")
+
+export manify
+
+include("manify.jl")
 
 end
