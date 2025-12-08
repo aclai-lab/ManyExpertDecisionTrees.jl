@@ -48,13 +48,13 @@ import DecisionTree: build_tree
         leaf1 = ManyExpertDecisionTrees.MEDTLeaf(0)
         leaf2 = ManyExpertDecisionTrees.MEDTLeaf(1)
         
-        mf1 = GaussianMF(0.0, 1.0)
-        mf2 = GaussianMF(1.0, 1.0)
-        
         node = ManyExpertDecisionTrees.MEDTNode(
-            0.5, 1,
-            (mf1,), (mf2,),
-            leaf1, leaf2
+            0.5, 
+            1,
+            FuzzyLogic.AbstractMembershipFunction[GaussianMF(0.0,1.0)], 
+            FuzzyLogic.AbstractMembershipFunction[GaussianMF(0.0, 1.0)],
+            leaf1, 
+            leaf2
         )
         
         @test node.featval == 0.5
@@ -72,10 +72,10 @@ import DecisionTree: build_tree
         
         dt = build_tree(y, Matrix(X))
         
-        experts = (GaussianMF, GaussianMF)
-        medt = manify(dt, X, experts)
+       
+        medt = manify(dt, X, GaussianMF, GaussianMF)
         
-        @test medt isa ManyExpertDecisionTree{2}
+        @test medt isa ManyExpertDecisionTree
         @test medt.featnames == ["x1", "x2"]
         @test length(medt.mftypes) == 2
         @test length(medt) >= 1
@@ -86,9 +86,44 @@ import DecisionTree: build_tree
         struct FakeMF{N}  
         end
         
-        @test_throws ErrorException ManyExpertDecisionTrees.ManyExpertDecisionTree{1}(
-            leaf, ["x"], (FakeMF,)
-        )
+        @test_throws ErrorException ManyExpertDecisionTrees.ManyExpertDecisionTree(leaf, ["x"], FakeMF, FakeMF)
 
+    end
+    
+    @testset "addexperts!" begin
+        X = DataFrame(
+            x1 = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            x2 = [1.0, 1.0, 2.0, 2.0, 3.0, 3.0]
+        )
+        y = [0, 0, 1, 1, 1, 1]
+        
+        dt = build_tree(y, Matrix(X))
+        medt = manify(dt, X, GaussianMF, GaussianMF)
+        
+        initial_expert_count = length(medt.mftypes)
+        initial_length = length(medt)
+        
+        addexperts!(medt, X, GaussianMF)
+        
+        @test length(medt.mftypes) == initial_expert_count + 1
+        @test length(medt) == initial_length  # Tree structure unchanged
+        @test medt.mftypes[end] == GaussianMF{Float64}
+        
+        root = medt.root
+        if root isa ManyExpertDecisionTrees.MEDTNode
+            @test length(root.mfleft) == initial_expert_count + 1
+            @test length(root.mfright) == initial_expert_count + 1
+        end
+        
+        addexperts!(medt, X, GaussianMF, GaussianMF)
+        
+        @test length(medt.mftypes) == initial_expert_count + 3
+        @test medt.mftypes[end-1] == GaussianMF{Float64}
+        @test medt.mftypes[end] == GaussianMF{Float64}
+        
+        if medt.root isa ManyExpertDecisionTrees.MEDTNode
+            @test length(medt.root.mfleft) == initial_expert_count + 3
+            @test length(medt.root.mfright) == initial_expert_count + 3
+        end
     end     
 end

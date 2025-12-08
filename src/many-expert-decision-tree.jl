@@ -1,4 +1,3 @@
-using SoleLogics
 using FuzzyLogic
 using DecisionTree
 
@@ -14,33 +13,33 @@ struct MEDTLeaf{T}
 end
 
 """
-    struct MEDTNode{N, T}
+    struct MEDTNode{T}
         featval::Float64
         featid::Int
-        mfleft::NTuple{N, FuzzyLogic.AbstractMembershipFunction}
-        mfright::NTuple{N, FuzzyLogic.AbstractMembershipFunction}
-        left::Union{MEDTNode{N, T}, MEDTLeaf{T}}
-        right::Union{MEDTNode{N, T}, MEDTLeaf{T}}
+        mfleft::Vector{FuzzyLogic.AbstractMembershipFunction}
+        mfright::Vector{FuzzyLogic.AbstractMembershipFunction}
+        left::Union{MEDTNode{T}, MEDTLeaf{T}}
+        right::Union{MEDTNode{T}, MEDTLeaf{T}}
     end
 
 A node structure that stores information about the corresponding split, as well as references
 to its child nodes and the N membership functions associated with its branches.
 """
-struct MEDTNode{N, T}
+struct MEDTNode{T}
     featval::Float64
     featid::Int
-    mfleft::NTuple{N, FuzzyLogic.AbstractMembershipFunction}
-    mfright::NTuple{N, FuzzyLogic.AbstractMembershipFunction}
-    left::Union{MEDTNode{N, T}, MEDTLeaf{T}}
-    right::Union{MEDTNode{N, T}, MEDTLeaf{T}}
+    mfleft::Vector{FuzzyLogic.AbstractMembershipFunction}
+    mfright::Vector{FuzzyLogic.AbstractMembershipFunction}
+    left::Union{MEDTNode{T}, MEDTLeaf{T}}
+    right::Union{MEDTNode{T}, MEDTLeaf{T}}
 end
 
 
 """
     struct ManyExpertDecisionTree{N, T}
-        root::Union{MEDTNode{N, T}, MEDTLeaf{T}}
+        root::Union{MEDTNode{T}, MEDTLeaf{T}}
         featnames::Vector{String}
-        mftypes::NTuple{N, DataType}
+        mftypes::Vector{DataType}
     end
 
 A MEDT is a DecisionTree-like structure that implements concepts from Many-Valued and Fuzzy Logics, 
@@ -49,26 +48,25 @@ are replaced by fuzzy splits, allowing partial membership of instances to multip
 The degree of membership of an instance to a branch is defined by the corresponding membership functions,
 each of which is associated with a different expert and parameterized on a different subset of data.
 """
-struct ManyExpertDecisionTree{N, T}
-    root::Union{MEDTNode{N, T}, MEDTLeaf{T}}
+struct ManyExpertDecisionTree{T}
+    root::Union{MEDTNode{T}, MEDTLeaf{T}}
     featnames::Vector{String}
-    mftypes::NTuple{N, DataType}
+    mftypes::Vector{DataType}
 
-    function ManyExpertDecisionTree{N}(
-        root::Union{MEDTNode{N, T}, MEDTLeaf{T}},
+    function ManyExpertDecisionTree(
+        root::Union{MEDTNode{T}, MEDTLeaf{T}},
         featnames::Vector{String},
-        mftypes::NTuple{N, UnionAll}
+        mftypes::UnionAll...
         ) where {
-            N, 
             T
-        }
+        } 
 
         for f in mftypes
             if !(f <: FuzzyLogic.AbstractMembershipFunction)
                 error("Unsupported Membership Function: only functions defined in the FuzzyLogic package are currently supported")
             end
         end
-        return new{N, T}(root, featnames, ntuple(i -> mftypes[i]{Float64}, N))
+        return new{T}(root, featnames, [mftypes[i]{Float64} for i in 1:length(mftypes)])
     end
 end
 
