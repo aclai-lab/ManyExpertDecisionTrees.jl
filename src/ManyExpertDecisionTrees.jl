@@ -2,8 +2,9 @@ module ManyExpertDecisionTrees
 
 using SoleLogics
 using DecisionTree
-using FuzzyLogic
 using Statistics
+
+import FuzzyLogic as FL
 
 export ManyExpertDecisionTree, depth
 
@@ -13,5 +14,9 @@ export manify, addexperts!
 
 include("manify.jl")
 include("utils.jl")
+
+export apply 
+
+include("apply.jl")
 
 end

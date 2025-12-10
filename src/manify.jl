@@ -1,6 +1,6 @@
 using DecisionTree
 using DataFrames
-
+import FuzzyLogic as FL
 
 """
     manify(dt::DecisionTree.Root, X::DataFrame, experts::NTuple{N, UnionAll})
@@ -24,8 +24,8 @@ function build_medt(node::Union{DecisionTree.Node, DecisionTree.Leaf}, experts::
         get_params(node.featval, node.featid, expertsdata[i], experts[i])
     end
 
-    mfleft = FuzzyLogic.AbstractMembershipFunction[experts[i](params[i][1]...) for i in 1:N]
-    mfright = FuzzyLogic.AbstractMembershipFunction[experts[i](params[i][2]...) for i in 1:N]
+    mfleft = FL.AbstractMembershipFunction[experts[i](params[i][1]...) for i in 1:N]
+    mfright = FL.AbstractMembershipFunction[experts[i](params[i][2]...) for i in 1:N]
    
     MEDTNode(
         node.featval,

@@ -1,4 +1,4 @@
-using FuzzyLogic
+import FuzzyLogic as FL
 using DecisionTree
 
 """
@@ -28,15 +28,15 @@ to its child nodes and the N membership functions associated with its branches.
 struct MEDTNode{T}
     featval::Float64
     featid::Int
-    mfleft::Vector{FuzzyLogic.AbstractMembershipFunction}
-    mfright::Vector{FuzzyLogic.AbstractMembershipFunction}
+    mfleft::Vector{FL.AbstractMembershipFunction}
+    mfright::Vector{FL.AbstractMembershipFunction}
     left::Union{MEDTNode{T}, MEDTLeaf{T}}
     right::Union{MEDTNode{T}, MEDTLeaf{T}}
 end
 
 
 """
-    struct ManyExpertDecisionTree{N, T}
+    struct ManyExpertDecisionTree{T}
         root::Union{MEDTNode{T}, MEDTLeaf{T}}
         featnames::Vector{String}
         mftypes::Vector{DataType}
@@ -62,7 +62,7 @@ struct ManyExpertDecisionTree{T}
         } 
 
         for f in mftypes
-            if !(f <: FuzzyLogic.AbstractMembershipFunction)
+            if !(f <: FL.AbstractMembershipFunction)
                 error("Unsupported Membership Function: only functions defined in the FuzzyLogic package are currently supported")
             end
         end

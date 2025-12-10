@@ -1,6 +1,6 @@
 using DataFrames
 using Statistics
-
+import FuzzyLogic as FL
 
 """
     subdivide(N, X::DataFrame)
@@ -23,7 +23,7 @@ function subdivide(N, X::DataFrame)
     end
 end
 
-function get_params(featval::Float64, featid::Int, expert_set::SubDataFrame, mem_func::Type{<:FuzzyLogic.AbstractMembershipFunction})
+function get_params(featval::Float64, featid::Int, expert_set::SubDataFrame, mem_func::Type{<:FL.AbstractMembershipFunction})
     error("Currently, only Gaussian parametrization is supported")
 end
 
@@ -34,7 +34,7 @@ end
 Given a split and the SubDataFrame related to an expert, return the mean and variance of the two subsets
 defined by the split.
 """
-function get_params(featval::Float64, featid::Int, expertdata::SubDataFrame, mem_func::Type{GaussianMF})
+function get_params(featval::Float64, featid::Int, expertdata::SubDataFrame, mem_func::Type{FL.GaussianMF})
     l = filter(x -> x <= featval, expertdata[:, featid])
     r = filter(x -> x > featval, expertdata[:, featid])
 
