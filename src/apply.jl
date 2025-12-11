@@ -1,15 +1,22 @@
 using SoleLogics.ManyValuedLogics
 
+
+"""
+    apply(tree::ManyExpertDecisionTree{T}, MXA::ManyExpertAlgebra, instance::AbstractVector{Float64}) where {T}
+
+Given an instance, evaluate its membership degree to each class using the tnorms defined by the ManyExpertAlgebra.  
+"""
 function apply(tree::ManyExpertDecisionTree{T}, MXA::ManyExpertAlgebra, instance::AbstractVector{Float64}) where {T}
     length(tree.mftypes) == length(MXA.experts) || 
         error("Expert mismatch: the number of experts in the Algebra doesn't match the expected number of experts")
    
     results = Dict{T, NTuple{length(MXA.experts), ContinuousTruth}}()
-    evalsubtree!(results, tree.root, MXA, instance, top(MXA))
+    evalsubtree(results, tree.root, MXA, instance, top(MXA))
     return results
 end
 
-function evalsubtree!(results::Dict{T, NTuple{N, ContinuousTruth}}, 
+# Internal function used to evaluate a subtree recursively 
+function evalsubtree(results::Dict{T, NTuple{N, ContinuousTruth}}, 
                       node::Union{MEDTNode{T}, MEDTLeaf{T}}, 
                       MXA::ManyExpertAlgebra, 
                       instance::AbstractVector{Float64}, 
@@ -24,8 +31,8 @@ function evalsubtree!(results::Dict{T, NTuple{N, ContinuousTruth}},
     end
 
     mmdgleft = ntuple(i -> ContinuousTruth(node.mfleft[i](instance[node.featid])), N)
-    evalsubtree!(results, node.left, MXA, instance, SoleLogics.collatetruth(∧, (mmdg, mmdgleft), MXA))
+    evalsubtree(results, node.left, MXA, instance, SoleLogics.collatetruth(∧, (mmdg, mmdgleft), MXA))
     
     mmdgright = ntuple(i -> ContinuousTruth(node.mfright[i](instance[node.featid])), N)
-    evalsubtree!(results, node.right, MXA, instance, SoleLogics.collatetruth(∧, (mmdg, mmdgright), MXA))
+    evalsubtree(results, node.right, MXA, instance, SoleLogics.collatetruth(∧, (mmdg, mmdgright), MXA))
 end

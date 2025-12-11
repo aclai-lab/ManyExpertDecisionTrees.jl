@@ -24,9 +24,8 @@ function subdivide(N, X::DataFrame)
 end
 
 function get_params(featval::Float64, featid::Int, expert_set::SubDataFrame, mem_func::Type{<:FL.AbstractMembershipFunction})
-    error("Currently, only Gaussian parametrization is supported")
+    error("Currently, only Gaussian parameterization is supported")
 end
-
 
 """
     get_params(featval::Float64, featid::Int, expertdata::SubDataFrame, mem_func::Type{GaussianMF})
@@ -38,8 +37,8 @@ function get_params(featval::Float64, featid::Int, expertdata::SubDataFrame, mem
     l = filter(x -> x <= featval, expertdata[:, featid])
     r = filter(x -> x > featval, expertdata[:, featid])
 
-    lp = mean(l), std(l)    # How do i handle limit cases such as empty sets? Should the predict function treat NaN values as a bot? 
-    rp = mean(r), std(r)    # What about 1 element sized arrays? 
+    lp = mean(l), std(l) 
+    rp = mean(r), std(r)    
     
     return lp, rp 
 end
