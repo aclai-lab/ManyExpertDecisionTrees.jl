@@ -2,8 +2,10 @@ using DecisionTree
 using DataFrames
 import FuzzyLogic as FL
 
+const CONSTANT_MF = FL.PiecewiseLinearMF([(0, 1)])
+
 """
-    manify(dt::DecisionTree.Root, X::DataFrame, experts::NTuple{N, UnionAll})
+    manify(dt::DecisionTree.Root, X::DataFrame, experts::UnionAll...)
 
 Convert a DecisionTree.jl decision tree into a ManyExpertDecisionTree by attaching N membership 
 functions per node, parameterized from subdivisions of X. 
@@ -26,8 +28,8 @@ function build_medt(node::Union{DecisionTree.Node, DecisionTree.Leaf}, experts::
 
     # If any of the parameters are NaN, default to the monoid's identity element
     # it doesn't add any information, but it doesn't take away any information either
-    mfleft = FL.AbstractMembershipFunction[any(isnan, params[i][1]) ? FL.PiecewiseLinearMF([(0, 1)]) : experts[i](params[i][1]...) for i in 1:N]
-    mfright = FL.AbstractMembershipFunction[any(isnan, params[i][2]) ? FL.PiecewiseLinearMF([(0, 1)]) : experts[i](params[i][2]...) for i in 1:N]
+    mfleft = FL.AbstractMembershipFunction[any(isnan, params[i][1]) ? CONSTANT_MF : experts[i](params[i][1]...) for i in 1:N]
+    mfright = FL.AbstractMembershipFunction[any(isnan, params[i][2]) ? CONSTANT_MF : experts[i](params[i][2]...) for i in 1:N]
    
     MEDTNode(
         node.featval,
@@ -63,8 +65,8 @@ function addmfs!(node::Union{MEDTLeaf, MEDTNode}, experts::NTuple{N, UnionAll}, 
     end
 
     for i in 1:N
-        push!(node.mfleft, any(isnan, params[i][1]) ? FL.PiecewiseLinearMF([(0, 1)]) : experts[i](params[i][1]...))
-        push!(node.mfright, any(isnan, params[i][2]) ? FL.PiecewiseLinearMF([(0, 1)]) : experts[i](params[i][2]...))
+        push!(node.mfleft, any(isnan, params[i][1]) ? CONSTANT_MF : experts[i](params[i][1]...))
+        push!(node.mfright, any(isnan, params[i][2]) ? CONSTANT_MF : experts[i](params[i][2]...))
     end
 
     addmfs!(node.left, experts, expertsdata)
