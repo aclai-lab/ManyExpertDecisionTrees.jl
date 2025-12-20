@@ -1,5 +1,6 @@
 # ManyExpertDecisionTrees.jl
 
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://aclai-lab.github.io/ManyExpertDecisionTrees.jl/dev)
 [![CI](https://github.com/aclai-lab/ManyExpertDecisionTrees.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/aclai-lab/ManyExpertDecisionTrees.jl/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/aclai-lab/ManyExpertDecisionTrees.jl/branch/main/graph/badge.svg?token=LT9IYIYNFI)](https://codecov.io/gh/aclai-lab/ManyExpertDecisionTrees.jl)
 
