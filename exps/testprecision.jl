@@ -1,6 +1,5 @@
 using Pkg
 
-
 Pkg.activate(@__DIR__)
 Pkg.develop(path=joinpath(@__DIR__, ".."))
 
@@ -10,13 +9,13 @@ else
     result_dir = joinpath(@__DIR__, "results")
 end
 
-#Pkg.add("DataFrames")
-#Pkg.add("CSV")
-#Pkg.add("Combinatorics")
-#Pkg.add("SoleLogics")
-# Pkg.add("MLJ")
-# Pkg.add("DecisionTree")
-# Pkg.add("FuzzyLogic")
+Pkg.add("DataFrames")
+Pkg.add("CSV")
+Pkg.add("Combinatorics")
+Pkg.add("SoleLogics")
+Pkg.add("MLJ")
+Pkg.add("DecisionTree")
+Pkg.add("FuzzyLogic")
 
 using ManyExpertDecisionTrees
 using DataFrames
