@@ -36,11 +36,7 @@ function apply(tree::ManyExpertDecisionTree{T}, MXA::ManyExpertAlgebra, instance
         end
     end
     
-    if length(candidates) == 1
-        return candidates[1]
-    else
-        return candidates
-    end
+    return candidates
 end
 
 # Internal function used to evaluate a subtree recursively 
