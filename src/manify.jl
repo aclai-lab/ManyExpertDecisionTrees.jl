@@ -28,8 +28,13 @@ function build_medt(node::Union{DecisionTree.Node, DecisionTree.Leaf}, experts::
 
     # If any of the parameters are NaN, default to the monoid's identity element
     # it doesn't add any information, but it doesn't take away any information either
-    mfleft = FL.AbstractMembershipFunction[any(isnan, params[i][1]) ? CONSTANT_MF : experts[i](params[i][1]...) for i in 1:N]
-    mfright = FL.AbstractMembershipFunction[any(isnan, params[i][2]) ? CONSTANT_MF : experts[i](params[i][2]...) for i in 1:N]
+    mfleft = Vector{FL.AbstractMembershipFunction}(undef, N)
+    mfright = Vector{FL.AbstractMembershipFunction}(undef, N)
+    
+    @inbounds for i in 1:N
+        mfleft[i] = any(isnan, params[i][1]) ? CONSTANT_MF : experts[i](params[i][1]...)
+        mfright[i] = any(isnan, params[i][2]) ? CONSTANT_MF : experts[i](params[i][2]...)
+    end
    
     MEDTNode(
         node.featval,

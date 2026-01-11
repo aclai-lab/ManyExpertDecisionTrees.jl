@@ -9,13 +9,13 @@ else
     result_dir = joinpath(@__DIR__, "results")
 end
 
-Pkg.add("DataFrames")
-Pkg.add("CSV")
-Pkg.add("Combinatorics")
-Pkg.add("SoleLogics")
-Pkg.add("MLJ")
-Pkg.add("DecisionTree")
-Pkg.add("FuzzyLogic")
+#Pkg.add("DataFrames")
+#Pkg.add("CSV")
+#Pkg.add("Combinatorics")
+#Pkg.add("SoleLogics")
+#Pkg.add("MLJ")
+#Pkg.add("DecisionTree")
+#Pkg.add("FuzzyLogic")
 
 using ManyExpertDecisionTrees
 using DataFrames
@@ -25,20 +25,22 @@ using SoleLogics.ManyValuedLogics
 using MLJ
 using DecisionTree
 import FuzzyLogic as FL
+using Profile
 
-n_runs = 10
-allexperts = (GodelLogic, LukasiewiczLogic, ProductLogic)
+function main()
+    n_runs = 10  
+    allexperts = (GodelLogic, LukasiewiczLogic, ProductLogic)
 
-# Compute all possible expert compbinations (with replacement)
-expertcomb = begin
-    c = Vector{Vector{FuzzyLogic}}()
-    for i in 1:length(allexperts)
-        append!(c, collect(Combinatorics.with_replacement_combinations(allexperts, i)))
+    # Compute all possible expert compbinations (with replacement)
+    expertcomb = begin
+        c = Vector{Vector{FuzzyLogic}}()
+        for i in 1:length(allexperts)
+            append!(c, collect(Combinatorics.with_replacement_combinations(allexperts, i)))
+        end
+        c
     end
-    c
-end
 
-@time begin
+
     # Doing this, otherwise results are unreadable 
     expertcombreadable = map(expertcomb) do experts
         result = ""
@@ -58,6 +60,8 @@ end
     end
 
     data_dir = joinpath(@__DIR__, "datasets/")
+    
+    MXAs = [ManyExpertAlgebra(experts...) for experts in expertcomb]
 
     # Loop over each dataset in the subfolder to compute metrics
     for dataset in readdir(joinpath(data_dir))
@@ -87,28 +91,36 @@ end
             dt = build_tree(y_train, Matrix(X_train))
             dt = prune_tree(dt, 0.9)
 
+            X_test_matrix = Matrix(X_test)
+
             # For each expert combination, build a ManyExpertDecisionTree 
             Threads.@threads for k in eachindex(expertcomb)
                 mf_experts = ntuple(_ -> FL.GaussianMF, length(expertcomb[k]))
-                MXA = ManyExpertAlgebra(expertcomb[k]...)
+                MXA = MXAs[k]  
 
                 medt = manify(dt, X_train, mf_experts...)
 
-                y_pred = map(eachrow(X_test)) do row
-                    result = apply(medt, MXA, Vector{Float64}(row))
+                y_pred = map(eachrow(X_test_matrix)) do row
+                    result = apply(medt, MXA, row)
                     return length(result) != 1 ? :vague : first(result)
                 end
 
                 # Extrapolating statistics
                 n_total = length(y_test)
-
-                n_vague = count(==(:vague), y_pred)
-                pvague = (n_vague / n_total) * 100
-
-                n_correct = count(i -> y_pred[i] == y_test[i], 1:n_total)
-                pcorrect = (n_correct / n_total) * 100
-
+                n_vague = 0
+                n_correct = 0
+                
+                @inbounds for i in 1:n_total
+                    if y_pred[i] == :vague
+                        n_vague += 1
+                    elseif y_pred[i] == y_test[i]
+                        n_correct += 1
+                    end
+                end
+                
                 n_wrong = n_total - n_correct - n_vague
+                pvague = (n_vague / n_total) * 100
+                pcorrect = (n_correct / n_total) * 100
                 pwrong = (n_wrong / n_total) * 100
 
                 deltacorrect = (pcorrect - correct[k][1])
@@ -148,3 +160,8 @@ end
         CSV.write(joinpath(result_dir, "pred_" * dataset), df)
     end
 end
+
+# Warmup (optional, checks for compilation time vs runtime)
+@time main()
+
+
