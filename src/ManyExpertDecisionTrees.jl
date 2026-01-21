@@ -10,7 +10,7 @@ export ManyExpertDecisionTree, depth
 
 include("many-expert-decision-tree.jl")
 
-export manify, addexperts!
+export manify, fuzzify
 
 include("manify.jl")
 include("utils.jl")
@@ -18,5 +18,8 @@ include("utils.jl")
 export apply 
 
 include("apply.jl")
+
+export predict
+include("metrics.jl")
 
 end

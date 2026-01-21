@@ -40,7 +40,6 @@ function main()
         c
     end
 
-
     # Doing this, otherwise results are unreadable 
     expertcombreadable = map(expertcomb) do experts
         result = ""
@@ -78,6 +77,8 @@ function main()
             X, y
         end
 
+        X = Matrix(X)
+
         for i in 1:n_runs
             # Partition set into training and validation
             X_train, y_train, X_test, y_test = begin
@@ -88,10 +89,8 @@ function main()
             end
 
             # Build a standard decision tree
-            dt = build_tree(y_train, Matrix(X_train))
+            dt = build_tree(y_train, X_train)
             dt = prune_tree(dt, 0.9)
-
-            X_test_matrix = Matrix(X_test)
 
             # For each expert combination, build a ManyExpertDecisionTree 
             Threads.@threads for k in eachindex(expertcomb)
@@ -161,7 +160,6 @@ function main()
     end
 end
 
-# Warmup (optional, checks for compilation time vs runtime)
 @time main()
 
 

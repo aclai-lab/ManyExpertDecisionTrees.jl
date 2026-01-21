@@ -13,32 +13,32 @@ struct MEDTLeaf{T}
 end
 
 """
-    struct MEDTNode{T}
-        featval::Float64
+    struct MEDTNode{T, S}
+        featval::S
         featid::Int
         mfleft::Vector{FuzzyLogic.AbstractMembershipFunction}
         mfright::Vector{FuzzyLogic.AbstractMembershipFunction}
-        left::Union{MEDTNode{T}, MEDTLeaf{T}}
-        right::Union{MEDTNode{T}, MEDTLeaf{T}}
+        left::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+        right::Union{MEDTNode{T, S}, MEDTLeaf{T}}
     end
 
 A node structure that stores information about the corresponding split, as well as references
 to its child nodes and the N membership functions associated with its branches.
 """
-struct MEDTNode{T}
-    featval::Float64
+struct MEDTNode{T, S}
+    featval::S
     featid::Int
     mfleft::Vector{FL.AbstractMembershipFunction}
     mfright::Vector{FL.AbstractMembershipFunction}
-    left::Union{MEDTNode{T}, MEDTLeaf{T}}
-    right::Union{MEDTNode{T}, MEDTLeaf{T}}
+    left::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+    right::Union{MEDTNode{T, S}, MEDTLeaf{T}}
 end
 
 
 """
-    struct ManyExpertDecisionTree{T}
-        root::Union{MEDTNode{T}, MEDTLeaf{T}}
-        featnames::Vector{String}
+    struct ManyExpertDecisionTree{T, S}
+        root::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+        nfeats::Int
         mftypes::Vector{DataType}
     end
 
@@ -48,17 +48,17 @@ are replaced by fuzzy splits, allowing partial membership of instances to multip
 The degree of membership of an instance to a branch is defined by the corresponding membership functions,
 each of which is associated with a different expert and parameterized on a different subset of data.
 """
-struct ManyExpertDecisionTree{T}
-    root::Union{MEDTNode{T}, MEDTLeaf{T}}
-    featnames::Vector{String}
+struct ManyExpertDecisionTree{T, S}
+    root::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+    nfeats::Int
     mftypes::Vector{DataType}
 
     function ManyExpertDecisionTree(
-        root::Union{MEDTNode{T}, MEDTLeaf{T}},
-        featnames::Vector{String},
+        root::Union{MEDTNode{T, S}, MEDTLeaf{T}},
+        nfeats::Int,
         mftypes::UnionAll...
         ) where {
-            T
+            T, S
         } 
 
         for f in mftypes
@@ -66,7 +66,7 @@ struct ManyExpertDecisionTree{T}
                 error("Unsupported Membership Function: only functions defined in the FuzzyLogic package are currently supported")
             end
         end
-        return new{T}(root, featnames, [mftypes[i]{Float64} for i in 1:length(mftypes)])
+        return new{T, S}(root, nfeats, [mftypes[i]{Float64} for i in 1:length(mftypes)])
     end
 end
 
