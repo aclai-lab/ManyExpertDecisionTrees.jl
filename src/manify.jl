@@ -20,7 +20,6 @@ function manify(dt::DecisionTree.Root, X::AbstractMatrix{S}, experts::UnionAll..
     return ManyExpertDecisionTree(root, size(X, 2), experts...) 
 end
 
-
 """
     fuzzify(dt::DecisionTree.Root, X::AbstractMatrix{S}, expert::UnionAll) 
 

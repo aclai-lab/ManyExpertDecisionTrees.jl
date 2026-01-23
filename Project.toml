@@ -3,6 +3,9 @@ uuid = "b59e7f69-5672-4a63-bb58-b897b1454099"
 version = "1.0.0"
 authors = ["Alberto Paparella", "Alexandr Sapogovski"]
 
+[workspace]
+projects = ["docs"]
+
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DecisionTree = "7806a523-6efd-50cb-b5f6-3fa6f1930dbb"
@@ -23,6 +26,3 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test"]
-
-[workspace]
-projects = ["docs"]

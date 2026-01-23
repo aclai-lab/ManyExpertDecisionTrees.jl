@@ -19,7 +19,7 @@ export apply
 
 include("apply.jl")
 
-export predict
+export predict, ConfusionMatrix, confusion_matrix
 include("metrics.jl")
 
 end
