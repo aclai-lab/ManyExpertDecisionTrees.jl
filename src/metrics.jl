@@ -1,5 +1,5 @@
-function predict(medt::ManyExpertDecisionTree, algebra::ManyExpertAlgebra, X::AbstractMatrix{S}) where {S}
-    return [apply(medt, algebra, row) for row in eachrow(X)]
+function predict(medt::ManyExpertDecisionTree, algebra::ManyExpertAlgebra, X::AbstractMatrix{S}; depth=-1) where {S}
+    return [apply(medt, algebra, row; depth) for row in eachrow(X)]
 end
 
 struct ConfusionMatrix

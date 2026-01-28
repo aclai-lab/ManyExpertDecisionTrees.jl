@@ -135,7 +135,7 @@ end
 
 function pushpareto!(
     solutions::Vector{Pair{MEDTLeafOrNode{T, S}, NTuple{N, ContinuousTruth}}},
-    node_mmdg::Pair{MEDTLeafOrNode{T, S}, NTuple{N, ContinuousTruth}},
+    node_mmdg::Pair{<:MEDTLeafOrNode{T, S}, NTuple{N, ContinuousTruth}},
     MXA
 ) where {T, S, N}
     
