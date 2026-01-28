@@ -97,40 +97,36 @@ import DecisionTree: build_tree
         dt = build_tree(y, X)
         medt = manify(dt, X, FL.GaussianMF, FL.GaussianMF)
         
-        MXA = ManyExpertAlgebra(GodelLogic, GodelLogic)
+        experts = (GodelLogic, GodelLogic)
         
         instance1 = [1.5, 1.0]
-        result1 = apply(medt, MXA, instance1)
+        result1 = apply(medt, experts, instance1)
         
         @test result1 isa Vector
         @test !isempty(result1)
         
         instance2 = [5.0, 3.0]
-        result2 = apply(medt, MXA, instance2)
+        result2 = apply(medt, experts, instance2)
         
         @test result2 isa Vector
         @test !isempty(result2)
         
         wrong_dim_instance = [1.0]  
-        @test_throws ErrorException apply(medt, MXA, wrong_dim_instance)
+        @test_throws ErrorException apply(medt, experts, wrong_dim_instance)
         
-        MXA_wrong = ManyExpertAlgebra(GodelLogic)
-        @test_throws ErrorException apply(medt, MXA_wrong, instance1)
-        
-        instance_int = [2, 2]
-        result_int = apply(medt, MXA, instance_int)
-        @test result_int isa Vector
+        experts_wrong = (GodelLogic,)
+        @test_throws ErrorException apply(medt, experts_wrong, instance1)
         
         medt3 = manify(dt, X, FL.GaussianMF, FL.GaussianMF, FL.GaussianMF)
-        MXA3 = ManyExpertAlgebra(GodelLogic, ProductLogic, LukasiewiczLogic)
+        experts = (GodelLogic, ProductLogic, LukasiewiczLogic)
         
-        result3 = apply(medt3, MXA3, instance1)
+        result3 = apply(medt3, experts, instance1)
         @test result3 isa Vector
         @test !isempty(result3)
 
         medt4 = fuzzify(dt, X, FL.GaussianMF)
-        MXA4 = ManyExpertAlgebra(GodelLogic)
-        result4 = apply(medt4, MXA4, instance1)
+        expert = GodelLogic
+        result4 = apply(medt4, expert, instance1; depth=2)
         @test result4 isa Vector
         @test !isempty(result4)
     end

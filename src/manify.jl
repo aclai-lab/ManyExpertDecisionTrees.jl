@@ -7,17 +7,22 @@ const CONSTANT_MF = FL.PiecewiseLinearMF([(0, 1)])
 """
     manify(dt::DecisionTree.Root, X::AbstractMatrix, experts::UnionAll...)
 
-Convert a DecisionTree.jl decision tree into a ManyExpertDecisionTree by attaching N membership 
-functions per node, parameterized from subdivisions of X. 
+Convert a DecisionTree.jl decision tree into a ManyExpertDecisionTree by attaching 
+N membership functions per node, parameterized from subdivisions of X. 
 """
-function manify(dt::DecisionTree.Root, X::AbstractMatrix{S}, experts::UnionAll...)::ManyExpertDecisionTree where {S}
+function manify(
+    dt::DecisionTree.Root, 
+    X::AbstractMatrix{S}, 
+    experts::UnionAll...
+)::ManyExpertDecisionTree where {S}
+
     size(X, 1) > 0 || throw(ArgumentError("X must have at least one row"))
     length(experts) > 0 || throw(ArgumentError("At least one expert must be provided"))
-    
+
     expertsdata = subdivide(length(experts), X)
     root = build_medt(dt.node, experts, expertsdata)
 
-    return ManyExpertDecisionTree(root, size(X, 2), experts...) 
+    return ManyExpertDecisionTree(root, size(X, 2), experts...)
 end
 
 """
@@ -31,14 +36,24 @@ function fuzzify(dt::DecisionTree.Root, X::AbstractMatrix{S}, expert::UnionAll) 
 end
 
 
-function build_medt(node::DecisionTree.Leaf, experts::NTuple{N, UnionAll}, expertsdata::NTuple{N, AbstractMatrix{S}}) where {N, S}
-        return MEDTLeaf(node.majority)
+function build_medt(
+    node::DecisionTree.Leaf,
+    experts::NTuple{N,UnionAll}, 
+    expertsdata::NTuple{N,AbstractMatrix{S}}
+) where {N,S}
+
+    return MEDTLeaf(node.majority)
+
 end
 
 
-function build_medt(node::DecisionTree.Node, experts::NTuple{N, UnionAll}, expertsdata::NTuple{N, AbstractMatrix{S}}) where {N, S}        
-    
-    expert_sets = ntuple(N) do i 
+function build_medt(
+    node::DecisionTree.Node, 
+    experts::NTuple{N,UnionAll}, 
+    expertsdata::NTuple{N,AbstractMatrix{S}}
+) where {N,S}
+
+    expert_sets = ntuple(N) do i
         split_set(node.featval, node.featid, expertsdata[i])
     end
 
@@ -50,13 +65,12 @@ function build_medt(node::DecisionTree.Node, experts::NTuple{N, UnionAll}, exper
 
     mfleft = Vector{FL.AbstractMembershipFunction}(undef, N)
     mfright = Vector{FL.AbstractMembershipFunction}(undef, N)
-    
+
     @inbounds for i in 1:N
         mfleft[i] = any(isnan, params[i][1]) ? CONSTANT_MF : experts[i](params[i][1]...)
         mfright[i] = any(isnan, params[i][2]) ? CONSTANT_MF : experts[i](params[i][2]...)
     end
-   
-    # Prepare left and right expert data for recursive calls
+
     left_expertsdata = ntuple(N) do i
         expert_sets[i][1]
     end
@@ -64,7 +78,7 @@ function build_medt(node::DecisionTree.Node, experts::NTuple{N, UnionAll}, exper
     right_expertsdata = ntuple(N) do i
         expert_sets[i][2]
     end
-   
+
     MEDTNode(
         node.featval,
         node.featid,

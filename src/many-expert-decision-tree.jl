@@ -34,6 +34,9 @@ struct MEDTNode{T, S}
     right::Union{MEDTNode{T, S}, MEDTLeaf{T}}
 end
 
+# Union type for nodes 
+const MEDTLeafOrNode{T,S} = Union{MEDTLeaf{T}, MEDTNode{T,S}}
+
 
 """
     struct ManyExpertDecisionTree{T, S}
