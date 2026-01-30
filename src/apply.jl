@@ -1,5 +1,15 @@
 using SoleLogics.ManyValuedLogics
 
+"""
+    function predict(
+        X::AbstractMatrix{S},
+        medt::ManyExpertDecisionTree{T, S},
+        experts::FuzzyLogic...
+    ) where {T, S}
+
+Given a set of test instances, evaluate the subset of classes they could belong to
+using the tnorms defined by the fuzzy logics
+"""
 function predict(
     X::AbstractMatrix{S},
     medt::ManyExpertDecisionTree{T, S},
@@ -10,6 +20,16 @@ function predict(
     return [apply(medt, MXA, row) for row in eachrow(X)]
 end
 
+"""
+    function predict(
+        X::AbstractMatrix{S},
+        medt::ManyExpertDecisionTree{T, S},
+        algebra::ManyExpertAlgebra
+    ) where {T, S}
+
+Given a set of test instances, evaluate the subset of classes they could belong to
+using the tnorms defined by the ManyExpertAlgebra
+"""
 function predict(
     X::AbstractMatrix{S},
     medt::ManyExpertDecisionTree{T, S},
@@ -20,9 +40,14 @@ function predict(
 end
 
 """
-    apply(tree::ManyExpertDecisionTree{T}, MXA::ManyExpertAlgebra, instance::AbstractVector{S}) where {T, S}
+   function apply(
+    tree::ManyExpertDecisionTree{T}, 
+    MXA::ManyExpertAlgebra, 
+    instance::AbstractVector{S}
+) where {T, S}
 
-Given an instance, evaluate its membership degree to each class using the tnorms defined by the ManyExpertAlgebra.  
+Given an instance, evaluate its membership degree to each class using the tnorms 
+defined by the ManyExpertAlgebra.  
 """
 function apply(
     tree::ManyExpertDecisionTree{T}, 

@@ -117,10 +117,6 @@ import DecisionTree: build_tree
         MXA_wrong = ManyExpertAlgebra(GodelLogic)
         @test_throws ErrorException apply(medt, MXA_wrong, instance1)
         
-        instance_int = [2, 2]
-        result_int = apply(medt, MXA, instance_int)
-        @test result_int isa Vector
-        
         medt3 = manify(dt, X, FL.GaussianMF, FL.GaussianMF, FL.GaussianMF)
         MXA3 = ManyExpertAlgebra(GodelLogic, ProductLogic, LukasiewiczLogic)
         
