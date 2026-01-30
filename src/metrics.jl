@@ -12,14 +12,18 @@ struct ClassStats
 end
 
 function confusionmatrix(
-    actual::Vector{T}, 
-    predicted::Vector{Vector{T}}
+    actual::AbstractVector{T}, 
+    predicted::AbstractVector{<:AbstractVector{T}}
 ) where {T}
 
-    classes = sort(unique(actual))
+    classes = Vector{T}(sort(unique(actual)))
     N = length(classes)
 
-    labels = sort(unique(vcat([[l] for l in classes], predicted)))
+    # Ensure labels are explicitly Vector{Vector{T}} for struct compatibility
+    labels_raw = unique(vcat([ [l] for l in classes ], predicted))
+    labels = Vector{Vector{T}}(map(x -> Vector{T}(x), labels_raw))
+    sort!(labels)
+    
     M = length(labels)
 
     _actual = zeros(Int, length(actual))
