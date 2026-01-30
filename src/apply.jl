@@ -5,7 +5,7 @@ function predict(
     medt::ManyExpertDecisionTree{T, S},
     experts::FuzzyLogic...;
     depth=-1
-) where {S}
+) where {T, S}
 
     MXA = ManyExpertAlgebra(experts...)
     return [apply(medt, MXA, row; depth) for row in eachrow(X)]
@@ -16,7 +16,7 @@ function predict(
     medt::ManyExpertDecisionTree{T, S},
     algebra::ManyExpertAlgebra;
     depth=-1
-) where {S}
+) where {T, S}
 
     return [apply(medt, algebra, row; depth) for row in eachrow(X)]
 end
