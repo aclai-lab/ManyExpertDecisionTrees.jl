@@ -1,5 +1,26 @@
 using SoleLogics.ManyValuedLogics
 
+function predict(
+    X::AbstractMatrix{S},
+    medt::ManyExpertDecisionTree{T, S},
+    experts::FuzzyLogic...;
+    depth=-1
+) where {S}
+
+    MXA = ManyExpertAlgebra(experts...)
+    return [apply(medt, MXA, row; depth) for row in eachrow(X)]
+end
+
+function predict(
+    X::AbstractMatrix{S},
+    medt::ManyExpertDecisionTree{T, S},
+    algebra::ManyExpertAlgebra;
+    depth=-1
+) where {S}
+
+    return [apply(medt, algebra, row; depth) for row in eachrow(X)]
+end
+
 function apply(
     tree::ManyExpertDecisionTree{T, S}, 
     expert::FuzzyLogic, 
