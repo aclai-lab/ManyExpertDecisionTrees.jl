@@ -1,11 +1,34 @@
 using SoleLogics.ManyValuedLogics
 
+function predict(
+    X::AbstractMatrix{S},
+    medt::ManyExpertDecisionTree{T, S},
+    experts::FuzzyLogic...
+) where {T, S}
+
+    MXA = ManyExpertAlgebra(experts...)
+    return [apply(medt, MXA, row) for row in eachrow(X)]
+end
+
+function predict(
+    X::AbstractMatrix{S},
+    medt::ManyExpertDecisionTree{T, S},
+    algebra::ManyExpertAlgebra
+) where {T, S}
+
+    return [apply(medt, algebra, row) for row in eachrow(X)]
+end
+
 """
     apply(tree::ManyExpertDecisionTree{T}, MXA::ManyExpertAlgebra, instance::AbstractVector{S}) where {T, S}
 
 Given an instance, evaluate its membership degree to each class using the tnorms defined by the ManyExpertAlgebra.  
 """
-function apply(tree::ManyExpertDecisionTree{T}, MXA::ManyExpertAlgebra, instance::AbstractVector{S}) where {T, S}
+function apply(
+    tree::ManyExpertDecisionTree{T}, 
+    MXA::ManyExpertAlgebra, 
+    instance::AbstractVector{S}
+) where {T, S}
     length(tree.mftypes) == length(MXA.experts) || 
         error("Expert mismatch: expected $(length(tree.mftypes)) experts, got $(length(MXA.experts))")
     
@@ -19,11 +42,13 @@ function apply(tree::ManyExpertDecisionTree{T}, MXA::ManyExpertAlgebra, instance
 end
 
 # Internal function used to evaluate a subtree recursively 
-function evalsubtree(candidates::Vector{Pair{T, NTuple{N, ContinuousTruth}}}, 
-                      node::MEDTLeaf{T},
-                      MXA::ManyExpertAlgebra, 
-                      instance::AbstractVector{S}, 
-                      mmdg::NTuple{N, ContinuousTruth}) where {T, N, S}
+function evalsubtree(
+    candidates::Vector{Pair{T, NTuple{N, ContinuousTruth}}}, 
+    node::MEDTLeaf{T},
+    MXA::ManyExpertAlgebra, 
+    instance::AbstractVector{S}, 
+    mmdg::NTuple{N, ContinuousTruth}
+) where {T, N, S}
     
     # Check if the new candidate is dominated by any existing candidate
     @inbounds for i in 1:length(candidates)
@@ -43,11 +68,13 @@ function evalsubtree(candidates::Vector{Pair{T, NTuple{N, ContinuousTruth}}},
     push!(candidates, node.label => mmdg)
 end
 
-function evalsubtree(candidates::Vector{Pair{T, NTuple{N, ContinuousTruth}}}, 
-                      node::MEDTNode{T}, 
-                      MXA::ManyExpertAlgebra, 
-                      instance::AbstractVector{S}, 
-                      mmdg::NTuple{N, ContinuousTruth}) where {T, N, S}
+function evalsubtree(
+    candidates::Vector{Pair{T, NTuple{N, ContinuousTruth}}}, 
+    node::MEDTNode{T, S},
+    MXA::ManyExpertAlgebra, 
+    instance::AbstractVector{S}, 
+    mmdg::NTuple{N, ContinuousTruth}
+) where {T, N, S}
 
     feat_val = instance[node.featid]
     

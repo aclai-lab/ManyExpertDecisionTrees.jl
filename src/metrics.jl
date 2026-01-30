@@ -1,42 +1,36 @@
-function predict(medt::ManyExpertDecisionTree, algebra::ManyExpertAlgebra, X::AbstractMatrix{S}) where {S}
-    return [apply(medt, algebra, row) for row in eachrow(X)]
-end
-
-struct ConfusionMatrix
-    classes::Vector
+struct ConfusionMatrix{T}
+    classes::Vector{T}
+    labels::Vector{Vector{T}}
     matrix::Matrix{Int}
-    accuracy::Float64
 end
 
-function Base.show(io::IO, cm::ConfusionMatrix)
-    print(io, "Classes:  ")
-    show(io, MIME("text/plain"), cm.classes)
-    println(io)
-    print(io, "Matrix:   ")
-    show(io, MIME("text/plain"), cm.matrix)
-    println(io)
-    print(io, "Accuracy: ")
-    show(io, cm.accuracy)
+struct ClassStats
+    TP::Float64
+    FP::Float64
+    TN::Float64
+    FN::Float64
 end
 
-function confusion_matrix(actual::AbstractVector, predicted::AbstractVector)
-    @assert length(actual) == length(predicted)
-    
-    labels = sort(unique(actual))
-    N = length(labels)
+function confusionmatrix(
+    actual::Vector{T}, 
+    predicted::Vector{Vector{T}}
+) where {T}
 
-    classes = sort(unique(vcat([ [l] for l in labels ], predicted)))
-    M = length(classes)
+    classes = sort(unique(actual))
+    N = length(classes)
+
+    labels = sort(unique(vcat([[l] for l in classes], predicted)))
+    M = length(labels)
 
     _actual = zeros(Int, length(actual))
     _pred = zeros(Int, length(predicted))
 
     for i in 1:N
-        _actual[actual .== labels[i]] .= i
+        _actual[actual .== classes[i]] .= i
     end
 
     for i in 1:M
-        _pred[predicted .== Ref(classes[i])] .= i
+        _pred[predicted .== Ref(labels[i])] .= i
     end
 
     CM = zeros(Int, N, M)
@@ -44,25 +38,82 @@ function confusion_matrix(actual::AbstractVector, predicted::AbstractVector)
         CM[i[1], i[2]] += 1
     end
 
-    total_score = 0.0
-    for r in 1:N
-        for c in 1:M
-            count = CM[r, c]
-            if count > 0
-                true_val = labels[r]
-                pred_val = classes[c]
-                
-                if true_val in pred_val
-                    k = length(pred_val)
-                    if k < N
-                        total_score += count * (1.0 / k)
-                    end
-                end
-            end
-        end
+    return ConfusionMatrix(classes, labels, CM)
+end
+
+function getstats(
+    cm::ConfusionMatrix{T}, 
+    target_class
+) where {T}
+
+    row = findfirst(==(target_class), cm.classes)
+
+    if isnothing(row) 
+        error("Class $target_class not found")
     end
 
-    accuracy = total_score / length(actual)
+    total_target_instances = sum(cm.matrix[row, :])
+    total_other_instances = sum(cm.matrix) - total_target_instances
 
-    return ConfusionMatrix(classes, CM, accuracy)
+    # Find all columns that contain the target class 
+    class_cols = [i for (i, pred_set) in enumerate(cm.labels) if target_class in pred_set]
+    
+    #= 
+        In the "fuzzy"/"multilabel" scenario, confusion matrix statistics have been
+        generalized to account for both crisp and vague classifications. Thus, we've 
+        defined:
+           - TP: in the row associated with the target class, sum the predictions 
+             that contain the target class weighted by 1/k, where k is the cardinality
+             of the set of predicted labels.
+
+           - FP: in all other rows beside the one associated with the target, sum 
+             predictions that contain the target class weighted by 1/k, where k is the
+             cardinality of the predicted set.
+
+           - TN: in all other rows beside the one associated with the target, 
+             classifications that don't contain the target class score 1; classifications 
+             that contain the target class score 1 - 1/k.
+
+           - FN: in the row associated with the target class, classifications that 
+             don't contain the target class score 1; classifications that contain the 
+             target class score 1 - 1/k.
+        
+        Note that: 
+        - TP + FN = n° of instances associated with the taret, while
+        - FP + TN = n° of all other instances
+    =#
+
+    TP = sum(class_cols; init=0.0) do c
+        count = cm.matrix[row, c]
+        k = length(cm.labels[c])
+        return count * (1.0 / k) 
+    end
+
+    FP = sum(class_cols; init=0.0) do c 
+        col_total = sum(cm.matrix[:, c])
+        count = col_total - cm.matrix[row, c]
+        k = length(cm.labels[c])
+        return count * (1.0 / k)
+    end 
+
+    FN = total_target_instances - TP
+    TN = total_other_instances - FP
+
+    return ClassStats(TP, FP, TN, FN)
 end
+
+accuracy(stats::ClassStats) = (stats.TP + stats.FP + stats.TN + stats.FN) == 0 ? 0.0 : (stats.TP + stats.TN) / (stats.TP + stats.TN + stats.FP + stats.FN)
+precision(stats::ClassStats)   = (stats.TP + stats.FP) == 0 ? 0.0 : stats.TP / (stats.TP + stats.FP)
+recall(stats::ClassStats)      = (stats.TP + stats.FN) == 0 ? 0.0 : stats.TP / (stats.TP + stats.FN)
+# specificity(stats::ClassStats) = (stats.TN + stats.FP) == 0 ? 0.0 : stats.TN / (stats.TN + stats.FP)
+# f1_score(stats::ClassStats)    = (precision(stats) + recall(stats)) == 0 ? 0.0 : 2 * (precision(stats) * recall(stats)) / (precision(stats) + recall(stats))
+
+accuracy(cm::ConfusionMatrix, target_class) = accuracy(getstats(cm, target_class))
+precision(cm::ConfusionMatrix, target_class)   = precision(getstats(cm, target_class))
+recall(cm::ConfusionMatrix, target_class)      = recall(getstats(cm, target_class))
+# specificity(cm::ConfusionMatrix, target_class) = specificity(getstats(cm, target_class))
+# f1_score(cm::ConfusionMatrix, target_class)    = f1_score(getstats(cm, target_class))
+
+
+
+
