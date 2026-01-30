@@ -1,25 +1,62 @@
+"""
+    struct ConfusionMatrix{T}
+        classes::Vector{T}
+        labels::Vector{Vector{T}}
+        matrix::Matrix{Int}
+    end
+
+Rectangular confusion matrix constructed by having real classes as rows and 
+predicted label sets as columns. Other statistics are computed starting from 
+this structure.
+"""
 struct ConfusionMatrix{T}
     classes::Vector{T}
     labels::Vector{Vector{T}}
     matrix::Matrix{Int}
 end
 
+"""
+    struct ClassStats
+        TP::Float64
+        FP::Float64
+        TN::Float64
+        FN::Float64
+        vagueness::Float64
+    end
+
+Simple container structure for storing class-wise statistics starting from a 
+confusion matrix
+"""
 struct ClassStats
     TP::Float64
     FP::Float64
     TN::Float64
     FN::Float64
+    vagueness::Float64
 end
 
+"""
+    function confusionmatrix(
+        actual::AbstractVector{T}, 
+        predicted::AbstractVector{<:AbstractVector{T}}
+    ) where {T}
+
+Given an array of actual labels and an arry of predicted label subsets, construct 
+a rectangular confusion matrix.
+"""
 function confusionmatrix(
-    actual::Vector{T}, 
-    predicted::Vector{Vector{T}}
+    actual::AbstractVector{T}, 
+    predicted::AbstractVector{<:AbstractVector{T}}
 ) where {T}
 
-    classes = sort(unique(actual))
+    classes = Vector{T}(sort(unique(actual)))
     N = length(classes)
 
-    labels = sort(unique(vcat([[l] for l in classes], predicted)))
+    # Ensure labels are explicitly Vector{Vector{T}} for struct compatibility
+    labels_raw = unique(vcat([ [l] for l in classes ], predicted))
+    labels = Vector{Vector{T}}(map(x -> Vector{T}(x), labels_raw))
+    sort!(labels)
+    
     M = length(labels)
 
     _actual = zeros(Int, length(actual))
@@ -41,10 +78,18 @@ function confusionmatrix(
     return ConfusionMatrix(classes, labels, CM)
 end
 
+"""
+    function getstats(
+        cm::ConfusionMatrix{T}, 
+        target_class
+    )::ClassStats where {T} 
+
+Compute statistics associated with a given class. Returns a ClassStats container
+"""
 function getstats(
     cm::ConfusionMatrix{T}, 
     target_class
-) where {T}
+)::ClassStats where {T}
 
     row = findfirst(==(target_class), cm.classes)
 
@@ -57,6 +102,19 @@ function getstats(
 
     # Find all columns that contain the target class 
     class_cols = [i for (i, pred_set) in enumerate(cm.labels) if target_class in pred_set]
+    
+    tot_preds = 0
+    tot_card = 0
+    
+    # Compute vagueness as average cardinality weighted by number of instances 
+    for c in class_cols
+        count = sum(cm.matrix[:, c]) 
+        k = length(cm.labels[c])
+        tot_preds += count
+        tot_card += count * k
+    end
+    
+    vagueness = tot_preds == 0 ? 0.0 : tot_card / tot_preds
     
     #= 
         In the "fuzzy"/"multilabel" scenario, confusion matrix statistics have been
@@ -99,18 +157,20 @@ function getstats(
     FN = total_target_instances - TP
     TN = total_other_instances - FP
 
-    return ClassStats(TP, FP, TN, FN)
+    return ClassStats(TP, FP, TN, FN, vagueness)
 end
 
-accuracy(stats::ClassStats) = (stats.TP + stats.FP + stats.TN + stats.FN) == 0 ? 0.0 : (stats.TP + stats.TN) / (stats.TP + stats.TN + stats.FP + stats.FN)
+accuracy(stats::ClassStats)    = (stats.TP + stats.FP + stats.TN + stats.FN) == 0 ? 0.0 : (stats.TP + stats.TN) / (stats.TP + stats.TN + stats.FP + stats.FN)
 precision(stats::ClassStats)   = (stats.TP + stats.FP) == 0 ? 0.0 : stats.TP / (stats.TP + stats.FP)
 recall(stats::ClassStats)      = (stats.TP + stats.FN) == 0 ? 0.0 : stats.TP / (stats.TP + stats.FN)
+vagueness(stats::ClassStats)   = stats.vagueness
 # specificity(stats::ClassStats) = (stats.TN + stats.FP) == 0 ? 0.0 : stats.TN / (stats.TN + stats.FP)
 # f1_score(stats::ClassStats)    = (precision(stats) + recall(stats)) == 0 ? 0.0 : 2 * (precision(stats) * recall(stats)) / (precision(stats) + recall(stats))
 
-accuracy(cm::ConfusionMatrix, target_class) = accuracy(getstats(cm, target_class))
+accuracy(cm::ConfusionMatrix, target_class)    = accuracy(getstats(cm, target_class))
 precision(cm::ConfusionMatrix, target_class)   = precision(getstats(cm, target_class))
 recall(cm::ConfusionMatrix, target_class)      = recall(getstats(cm, target_class))
+vagueness(cm::ConfusionMatrix, target_class)   = vagueness(getstats(cm, target_class))
 # specificity(cm::ConfusionMatrix, target_class) = specificity(getstats(cm, target_class))
 # f1_score(cm::ConfusionMatrix, target_class)    = f1_score(getstats(cm, target_class))
 
