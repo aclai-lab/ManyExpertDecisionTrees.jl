@@ -1,24 +1,35 @@
 using SoleLogics.ManyValuedLogics
 
-function predict(
-    X::AbstractMatrix{S},
-    medt::ManyExpertDecisionTree{T, S},
-    experts::FuzzyLogic...;
+function apply(
+    tree::ManyExpertDecisionTree{T, S},
+    expert::FuzzyLogic,
+    X::AbstractMatrix{S};
     depth=-1
 ) where {T, S}
 
-    MXA = ManyExpertAlgebra(experts...)
-    return [apply(medt, MXA, row; depth) for row in eachrow(X)]
+    MXA = ManyExpertAlgebra(expert)
+    return [apply(tree, MXA, row; depth) for row in eachrow(X)]
 end
 
-function predict(
-    X::AbstractMatrix{S},
-    medt::ManyExpertDecisionTree{T, S},
-    algebra::ManyExpertAlgebra;
+function apply(
+    tree::ManyExpertDecisionTree{T, S},
+    experts::NTuple{N, FuzzyLogic}, 
+    X::AbstractMatrix{S};
+    depth=-1
+) where {T, S, N}
+
+    MXA = ManyExpertAlgebra(experts...)
+    return [apply(tree, MXA, row; depth) for row in eachrow(X)]
+end
+
+function apply(
+    tree::ManyExpertDecisionTree{T, S},
+    algebra::ManyExpertAlgebra,
+    X::AbstractMatrix{S};
     depth=-1
 ) where {T, S}
 
-    return [apply(medt, algebra, row; depth) for row in eachrow(X)]
+    return [apply(tree, algebra, row; depth) for row in eachrow(X)]
 end
 
 function apply(
@@ -72,7 +83,6 @@ function apply(
         if lvl == depth
             local_maxima = empty(queue)
 
-            # I have to find a way to prune out undesired values
             for (node, mmdg) in queue 
                 if node isa MEDTLeaf
                     pushpareto!(solutions, node => mmdg, MXA)
