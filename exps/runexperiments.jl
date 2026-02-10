@@ -4,93 +4,191 @@ Pkg.develop(path=joinpath(@__DIR__, ".."))
 
 using ManyExpertDecisionTrees
 using DataFrames
+using Random
 using CSV
 using SoleLogics.ManyValuedLogics
 using PrettyTables
 using Printf
 
-metrics = [:accuracy, :precision, :recall, :vagueness]
+formats = Dict(
+    :latex => ".tex",
+    :text => ".txt",
+    :html => ".html"
+)
 
-fmt(v) = isnan(v.mean) ? "NaN" : @sprintf("%.3f ± %.3f", v.mean, v.std)
+function runexps(metrics::Vector{Symbol}; n_splits::Int=50, format::Symbol=:text, rng=Random.GLOBAL_RNG)
 
-function main()
-    data_dir = joinpath(@__DIR__, "datasets")
+    format ∉ keys(formats) && return println("invalid output format")
+
+    data_dir = joinpath(@__DIR__, "datasets/processed/")
     datasets = filter(endswith(".csv"), readdir(data_dir))
     isempty(datasets) && return println("No datasets found in $data_dir")
 
-    results_dir = joinpath(@__DIR__, "results")
+    results_dir = joinpath(@__DIR__, "results/")
     mkpath(results_dir)
-    results_path = joinpath(results_dir, "results_table.txt")
+    results_path = joinpath(results_dir, "results_table" * formats[format])
 
     n_metrics = length(metrics)
 
     logics = [
-        "Godel"        => GodelLogic,
-        "Product"      => ProductLogic,
-        "Lukasiewicz"  => LukasiewiczLogic,
+        "Godel" => GodelLogic,
+        "Product" => ProductLogic,
+        "Lukasiewicz" => LukasiewiczLogic,
     ]
+
+    n_logic_groups = length(logics) + 1
 
     println("Starting Experiments...")
 
     row_labels = String[]
-    row_group_labels = Pair{Int,String}[]
-    data_blocks = Matrix{String}[]
+    row_group_labels = Pair{Int, String}[]
+
+
+    raw_data = Matrix{NamedTuple{(:mean, :std), Tuple{Float64, Float64}}}[]
+
     current_row = 1
+    for dataset in datasets
+        dataset_name = replace(dataset, ".csv" => "")
+        println("> Processing $dataset_name...")
 
-    for ds_file in datasets
-        ds_name = replace(ds_file, ".csv" => "")
-        println("> Processing $ds_name...")
-
-        df = CSV.read(joinpath(data_dir, ds_file), DataFrame)
+        df = DataFrame(CSV.File(joinpath(data_dir, dataset)))
         X = Matrix(df[:, 1:end-1])
         y = df[:, end]
 
+        # Montecarlo cv for all experts
         results = map(logics) do (name, logic)
-            println("  - Running $name...")
-            montecarlocv(X, y, logic, metrics; n_splits=50, rng=1)
+            println("   - Evaluating $name...")
+            montecarlocv(X, y, logic, metrics; n_splits=n_splits, rng=rng)
         end
 
-        block = hcat((fmt.(r.fuzzy) for r in results)..., fmt.(results[1].crisp))
-        push!(data_blocks, block)
+        # Push raw results to results table (exclude vagueness from crisp)
+        crisp_col_indices = findall(m -> m != :vagueness, metrics)
+        raw_block = hcat(results[1].crisp[:, crisp_col_indices], [r.fuzzy for r in results]...)
+        push!(raw_data, raw_block)
 
+        # Fill row labels and set row group labels for each dataset
         labels = string.(results[1].row_labels)
         append!(row_labels, labels)
-        push!(row_group_labels, current_row => ds_name)
+        push!(row_group_labels, current_row => dataset_name)
+
         current_row += length(labels)
     end
 
     println("\n", "="^40, "\nFINAL RESULTS\n", "="^40)
 
+    crisp_metrics = filter(m -> m != :vagueness, metrics)
+    n_crisp_metrics = length(crisp_metrics)
+
     header_top = [
-        [MultiColumn(n_metrics, name) for (name, _) in logics]...,
-        MultiColumn(n_metrics, "Crisp"),
-    ]
-    header_bot = repeat(String.(metrics), length(logics) + 1)
+        n_crisp_metrics > 1 ? MultiColumn(n_crisp_metrics, "Crisp") : "Crisp",
+        [n_metrics > 1 ? MultiColumn(n_metrics, name) : name for (name, _) in logics]...]
+    header_bot = vcat(String.(crisp_metrics), repeat(String.(metrics), length(logics)))
 
-    table_data = reduce(vcat, data_blocks)
-    pretty_table(
-        table_data;
-        column_labels = [header_top, header_bot],
-        merge_column_label_cells = :auto,
-        row_labels,
-        row_group_labels,
-        alignment = :c,
-    )
+    # Map each column to its metric (for highlighting)
+    col_metric_map = vcat(crisp_metrics, repeat(metrics, length(logics)))
+    
+    raw_data = reduce(vcat, raw_data)
 
-    open(results_path, "w") do io
-        pretty_table(
-            io,
-            table_data;
+    # Format cell values depending on output format
+    function format_val(x)
+        s = @sprintf("%.2f", x)
+        s == "1.00" && return "1"
+        s == "0.00" && return "0"
+        startswith(s, "0.") && return s[2:end]
+        return s
+    end
+
+    fmt = if format == :latex
+        v -> isnan(v.mean) ? LatexCell("NaN") : LatexCell("\$$(format_val(v.mean)) \\pm $(format_val(v.std))\$")
+    else
+        v -> isnan(v.mean) ? "NaN" : "$(format_val(v.mean)) ± $(format_val(v.std))"
+    end
+
+    table_data = fmt.(raw_data)
+
+    rawmean(v) = v.mean
+    raw_means = rawmean.(raw_data)
+
+    # Highlighter: bold the best value per metric per row (excluding vagueness)
+    function is_best(data, i, j)
+        metric = col_metric_map[j]
+        metric == :vagueness && return false
+        same_metric_cols = findall(==(metric), col_metric_map)
+        row_vals = [data[i, c] for c in same_metric_cols]
+        best_val = maximum(filter(!isnan, row_vals); init=-Inf)
+        return data[i, j] == best_val && !isnan(data[i, j])
+    end
+
+    # Build backend and highlighter based on format
+    if format == :text
+        hl = TextHighlighter(
+            (data, i, j) -> is_best(raw_means, i, j),
+            bold = true,
+            foreground = :green
+        )
+
+        kwargs = (
             column_labels = [header_top, header_bot],
             merge_column_label_cells = :auto,
-            row_labels,
-            row_group_labels,
-            alignment = :c,
             display_size = (-1, -1),
+            row_labels = row_labels,
+            row_group_labels = row_group_labels,
+            alignment = :c,
+            highlighters = [hl,],
         )
+
+        pretty_table(table_data; kwargs...)
+
+        open(results_path, "w") do io
+            pretty_table(io, table_data; kwargs...)
+        end
+
+    elseif format == :latex
+        hl = LatexHighlighter(
+            (data, i, j) -> is_best(raw_means, i, j),
+            ["textbf"]
+        )
+
+        kwargs = (
+            backend = :latex,
+            column_labels = [header_top, header_bot],
+            merge_column_label_cells = :auto,
+            row_labels = row_labels,
+            row_group_labels = row_group_labels,
+            alignment = :c,
+            highlighters = [hl,],
+        )
+
+        pretty_table(table_data; kwargs...)
+
+        open(results_path, "w") do io
+            pretty_table(io, table_data; kwargs...)
+        end
+
+    elseif format == :html
+        hl = HtmlHighlighter(
+            (data, i, j) -> is_best(raw_means, i, j),
+            HtmlDecoration(font_weight = "bold", color = "green")
+        )
+
+        kwargs = (
+            backend = :html,
+            column_labels = [header_top, header_bot],
+            merge_column_label_cells = :auto,
+            row_labels = row_labels,
+            row_group_labels = row_group_labels,
+            alignment = :c,
+            highlighters = [hl,],
+        )
+
+        pretty_table(table_data; kwargs...)
+
+        open(results_path, "w") do io
+            pretty_table(io, table_data; kwargs...)
+        end
     end
 
     println("\nSaved table to $results_path")
 end
 
-main()
+runexps([:accuracy, :recall, :precision]; format=:text)

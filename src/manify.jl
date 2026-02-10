@@ -22,6 +22,10 @@ function manify(
     expertsdata = subdivide(length(experts), X)
     root = build_medt(dt.node, experts, expertsdata)
 
+    if root isa MEDTLeaf
+        return ManyExpertDecisionTree{typeof(root.label), S}(root, size(X, 2), experts...)
+    end
+
     return ManyExpertDecisionTree(root, size(X, 2), experts...)
 end
 
@@ -43,7 +47,6 @@ function build_medt(
 ) where {N,S}
 
     return MEDTLeaf(node.majority)
-
 end
 
 
@@ -57,18 +60,29 @@ function build_medt(
         split_set(node.featval, node.featid, expertsdata[i])
     end
 
-    params = ntuple(N) do i
-        l = get_params(node.featid, expert_sets[i][1], experts[i])
-        r = get_params(node.featid, expert_sets[i][2], experts[i])
-        l, r
-    end
-
     mfleft = Vector{FL.AbstractMembershipFunction}(undef, N)
     mfright = Vector{FL.AbstractMembershipFunction}(undef, N)
 
     @inbounds for i in 1:N
-        mfleft[i] = any(isnan, params[i][1]) ? CONSTANT_MF : experts[i](params[i][1]...)
-        mfright[i] = any(isnan, params[i][2]) ? CONSTANT_MF : experts[i](params[i][2]...)
+        split_val = convert(Float64, node.featval)
+        
+        # Left branch
+        set_l = expert_sets[i][1]
+        if size(set_l, 1) < 15
+            mfleft[i] = FL.PiecewiseLinearMF([(split_val, 1.0), (split_val + 1e-5, 0.0)])
+        else
+            p_l = get_params(node.featid, set_l, experts[i])
+            mfleft[i] = any(isnan, p_l) ? CONSTANT_MF : experts[i](p_l...)
+        end
+
+        # Right branch
+        set_r = expert_sets[i][2]
+        if size(set_r, 1) < 15
+            mfright[i] = FL.PiecewiseLinearMF([(split_val, 0.0), (split_val + 1e-5, 1.0)])
+        else
+            p_r = get_params(node.featid, set_r, experts[i])
+            mfright[i] = any(isnan, p_r) ? CONSTANT_MF : experts[i](p_r...)
+        end
     end
 
     left_expertsdata = ntuple(N) do i

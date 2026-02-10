@@ -68,7 +68,8 @@ function montecarlocv(
     expert::FuzzyLogic,
     metrics::AbstractVector{Symbol};
     n_splits::Int=50,
-    test_size::Float64=0.2,
+    apply_depth::Int=-1,
+    test_size::Float64=0.3,
     rng::Union{Int, AbstractRNG}=Random.GLOBAL_RNG
 ) where {S, T}
 
@@ -104,10 +105,10 @@ function montecarlocv(
         fdt = fuzzify(cdt, X_train, FL.GaussianMF)
 
         cy_pred = DT.apply_tree(cdt, X_test)
-        fy_pred = apply(fdt, expert, X_test)
+        fy_pred = apply(fdt, expert, X_test; depth=apply_depth)
 
-        crisp_cm = convert(ConfusionMatrix{eltype(y_test)}, DT.confusion_matrix(y_test, cy_pred))
-        fuzzy_cm = confusionmatrix(y_test, fy_pred)
+        crisp_cm = convert(ConfusionMatrix{eltype(y_test)}, DT.confusion_matrix(y_test, cy_pred); classes=class_names)
+        fuzzy_cm = confusionmatrix(y_test, fy_pred; classes=class_names)
         
         raw_folds[i] = (fuzzy=fuzzy_cm, crisp=crisp_cm)
 
@@ -123,15 +124,22 @@ function montecarlocv(
                 fuzzy_scores[i, r_idx, c_idx] = func(fuzzy_cm, cls)
             end
 
-            crisp_scores[i, n_rows, c_idx] = func(crisp_cm)
-            fuzzy_scores[i, n_rows, c_idx] = func(fuzzy_cm)
+            # Macro average derived from per-class scores for consistency
+            crisp_scores[i, n_rows, c_idx] = mean(crisp_scores[i, r, c_idx] for r in 1:(n_rows - 1))
+            fuzzy_scores[i, n_rows, c_idx] = mean(fuzzy_scores[i, r, c_idx] for r in 1:(n_rows - 1))
         end
     end
     
     function collapse_tensor(tensor)
-        means = dropdims(mean(tensor, dims=1), dims=1)
-        stds  = dropdims(std(tensor, dims=1), dims=1)
-        return [ (mean=means[r,c], std=stds[r,c]) for r in 1:n_rows, c in 1:n_cols ]
+        function safestats(x)
+            valid = filter(!isnan, x)
+            isempty(valid) && return (mean=NaN, std=NaN)
+            m = mean(valid)
+            s = length(valid) > 1 ? std(valid) : 0.0
+            return (mean=m, std=s)
+        end
+
+        return [safestats(tensor[:, r, c]) for r in 1:n_rows, c in 1:n_cols]
     end
 
     return CVResults(

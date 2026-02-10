@@ -17,11 +17,34 @@ struct ConfusionMatrix{T}
     matrix::Matrix{Int}
 end
 
-function Base.convert(::Type{ManyExpertDecisionTrees.ConfusionMatrix{T}}, cm::DecisionTree.ConfusionMatrix) where {T}
-    classes = map(x -> convert(T, x), cm.classes)    
-    labels = Vector{Vector{T}}([ [l] for l in classes ])
+function Base.convert(
+    ::Type{ManyExpertDecisionTrees.ConfusionMatrix{T}}, 
+    cm::DecisionTree.ConfusionMatrix;
+    classes::Union{Nothing, AbstractVector{T}}=nothing
+) where {T}
+    dt_classes = map(x -> convert(T, x), cm.classes)
 
-    return ConfusionMatrix(classes, labels, cm.matrix)
+    if classes === nothing
+        labels = Vector{Vector{T}}([[l] for l in dt_classes])
+        return ConfusionMatrix(dt_classes, labels, cm.matrix)
+    end
+
+    global_classes = sort(classes)
+    labels = Vector{Vector{T}}([[l] for l in global_classes])
+    N = length(global_classes)
+    matrix = zeros(Int, N, N)
+
+    for (di, dc) in enumerate(dt_classes)
+        gi = findfirst(==(dc), global_classes)
+        gi === nothing && continue
+        for (dj, dc2) in enumerate(dt_classes)
+            gj = findfirst(==(dc2), global_classes)
+            gj === nothing && continue
+            matrix[gi, gj] = cm.matrix[di, dj]
+        end
+    end
+
+    return ConfusionMatrix(global_classes, labels, matrix)
 end
 
 """
@@ -55,10 +78,11 @@ a rectangular confusion matrix.
 """
 function confusionmatrix(
     actual::AbstractVector{T}, 
-    predicted::AbstractVector{<:AbstractVector{T}}
+    predicted::AbstractVector{<:AbstractVector{T}};
+    classes::Union{Nothing, AbstractVector{T}}=nothing
 ) where {T}
 
-    classes = Vector{T}(sort(unique(actual)))
+    classes = isnothing(classes) ? Vector{T}(sort(unique(actual))) : Vector{T}(sort(classes))
     N = length(classes)
 
     certain_labels = [ [l] for l in classes ]
