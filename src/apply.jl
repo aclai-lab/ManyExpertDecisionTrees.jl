@@ -3,7 +3,7 @@ using SoleLogics.ManyValuedLogics
 function apply(
     tree::ManyExpertDecisionTree{T, S},
     expert::FuzzyLogic,
-    X::AbstractMatrix{S};
+    X::AbstractMatrix;
     depth=-1
 ) where {T, S}
 
@@ -14,7 +14,7 @@ end
 function apply(
     tree::ManyExpertDecisionTree{T, S},
     experts::NTuple{N, FuzzyLogic}, 
-    X::AbstractMatrix{S};
+    X::AbstractMatrix;
     depth=-1
 ) where {T, S, N}
 
@@ -25,7 +25,7 @@ end
 function apply(
     tree::ManyExpertDecisionTree{T, S},
     algebra::ManyExpertAlgebra,
-    X::AbstractMatrix{S};
+    X::AbstractMatrix;
     depth=-1
 ) where {T, S}
 
@@ -38,6 +38,7 @@ function apply(
     instance::AbstractVector; 
     depth=-1
 ) where {T, S}
+
     MXA = ManyExpertAlgebra(expert)
     apply(tree, MXA, instance; depth=depth)
 end
@@ -48,6 +49,7 @@ function apply(
     instance::AbstractVector; 
     depth=-1
 ) where {T, N, S}
+
     MXA = ManyExpertAlgebra(experts...)
     apply(tree, MXA, instance; depth=depth)
 end

@@ -2,8 +2,6 @@ using DecisionTree
 using DataFrames
 import FuzzyLogic as FL
 
-const CONSTANT_MF = FL.PiecewiseLinearMF([(0, 1)])
-
 """
     manify(dt::DecisionTree.Root, X::AbstractMatrix, experts::UnionAll...)
 
@@ -13,14 +11,15 @@ N membership functions per node, parameterized from subdivisions of X.
 function manify(
     dt::DecisionTree.Root, 
     X::AbstractMatrix{S}, 
-    experts::UnionAll...
+    experts::UnionAll...;
+    kwargs...
 )::ManyExpertDecisionTree where {S}
 
     size(X, 1) > 0 || throw(ArgumentError("X must have at least one row"))
     length(experts) > 0 || throw(ArgumentError("At least one expert must be provided"))
 
     expertsdata = subdivide(length(experts), X)
-    root = build_medt(dt.node, experts, expertsdata)
+    root = build_medt(dt.node, experts, expertsdata; kwargs...)
 
     if root isa MEDTLeaf
         return ManyExpertDecisionTree{typeof(root.label), S}(root, size(X, 2), experts...)
@@ -30,78 +29,111 @@ function manify(
 end
 
 """
-    fuzzify(dt::DecisionTree.Root, X::AbstractMatrix{S}, expert::UnionAll) 
+    fuzzify(dt::DecisionTree.Root, X::AbstractMatrix{S}, expert::UnionAll; kwargs...) 
 
 Convert a DecisionTree.jl decision tree into a FuzzyTree, which is a ManyExpertDecisionTree with 
 a single expert. 
 """
-function fuzzify(dt::DecisionTree.Root, X::AbstractMatrix{S}, expert::UnionAll) where {S}
-    return manify(dt, X, expert)
+function fuzzify(
+    dt::DecisionTree.Root,
+    X::AbstractMatrix{S}, 
+    expert::UnionAll; 
+    kwargs...
+) where {S}
+    return manify(dt, X, expert; kwargs...)
 end
 
 
 function build_medt(
     node::DecisionTree.Leaf,
     experts::NTuple{N,UnionAll}, 
-    expertsdata::NTuple{N,AbstractMatrix{S}}
+    expertsdata::NTuple{N,AbstractMatrix{S}};
+    kwargs...
 ) where {N,S}
 
     return MEDTLeaf(node.majority)
 end
 
-
 function build_medt(
     node::DecisionTree.Node, 
     experts::NTuple{N,UnionAll}, 
-    expertsdata::NTuple{N,AbstractMatrix{S}}
+    expertsdata::NTuple{N,AbstractMatrix{S}};
+    kwargs...
 ) where {N,S}
+    
+    split_val = convert(Float64, node.featval)
 
-    expert_sets = ntuple(N) do i
-        split_set(node.featval, node.featid, expertsdata[i])
-    end
+    # Calculate MFs and get split datasets for each expert
+    results = ntuple(i -> build_mfs(experts[i], node.featid, split_val, expertsdata[i]; kwargs...), N)
 
-    mfleft = Vector{FL.AbstractMembershipFunction}(undef, N)
-    mfright = Vector{FL.AbstractMembershipFunction}(undef, N)
+    # Unpack results
+    mfleft = FL.AbstractMembershipFunction[r[1] for r in results]
+    mfright = FL.AbstractMembershipFunction[r[2] for r in results]
+    left_expertsdata = ntuple(i -> results[i][3], N)
+    right_expertsdata = ntuple(i -> results[i][4], N)
 
-    @inbounds for i in 1:N
-        split_val = convert(Float64, node.featval)
-        
-        # Left branch
-        set_l = expert_sets[i][1]
-        if size(set_l, 1) < 15
-            mfleft[i] = FL.PiecewiseLinearMF([(split_val, 1.0), (split_val + 1e-5, 0.0)])
-        else
-            p_l = get_params(node.featid, set_l, experts[i])
-            mfleft[i] = any(isnan, p_l) ? CONSTANT_MF : experts[i](p_l...)
-        end
-
-        # Right branch
-        set_r = expert_sets[i][2]
-        if size(set_r, 1) < 15
-            mfright[i] = FL.PiecewiseLinearMF([(split_val, 0.0), (split_val + 1e-5, 1.0)])
-        else
-            p_r = get_params(node.featid, set_r, experts[i])
-            mfright[i] = any(isnan, p_r) ? CONSTANT_MF : experts[i](p_r...)
-        end
-    end
-
-    left_expertsdata = ntuple(N) do i
-        expert_sets[i][1]
-    end
-
-    right_expertsdata = ntuple(N) do i
-        expert_sets[i][2]
-    end
-
-    MEDTNode(
-        node.featval,
-        node.featid,
-        mfleft,
+    return MEDTNode(
+        split_val, 
+        node.featid, 
+        mfleft, 
         mfright,
-        build_medt(node.left, experts, left_expertsdata),
-        build_medt(node.right, experts, right_expertsdata)
+        build_medt(node.left, experts, left_expertsdata; kwargs...),
+        build_medt(node.right, experts, right_expertsdata; kwargs...)
     )
 end
+
+# function build_medt(
+#     node::DecisionTree.Node, 
+#     experts::NTuple{N,UnionAll}, 
+#     expertsdata::NTuple{N,AbstractMatrix{S}}
+# ) where {N,S}
+
+#     expert_sets = ntuple(N) do i
+#         split_set(node.featval, node.featid, expertsdata[i])
+#     end
+
+#     mfleft = Vector{FL.AbstractMembershipFunction}(undef, N)
+#     mfright = Vector{FL.AbstractMembershipFunction}(undef, N)
+
+#     @inbounds for i in 1:N
+#         split_val = convert(Float64, node.featval)
+        
+#         # Left branch
+#         set_l = expert_sets[i][1]
+#         if size(set_l, 1) < 15
+#             mfleft[i] = FL.PiecewiseLinearMF([(split_val, 1.0), (split_val + 1e-5, 0.0)])
+#         else
+#             params_l = get_params(node.featid, set_l, experts[i])
+#             mfleft[i] = any(isnan, params_l) ? CONSTANT_MF : experts[i](params_l...)
+#         end
+
+#         # Right branch
+#         set_r = expert_sets[i][2]
+#         if size(set_r, 1) < 15
+#             mfright[i] = FL.PiecewiseLinearMF([(split_val, 0.0), (split_val + 1e-5, 1.0)])
+#         else
+#             params_r = get_params(node.featid, set_r, experts[i])
+#             mfright[i] = any(isnan, params_r) ? CONSTANT_MF : experts[i](params_r...)
+#         end
+#     end
+
+#     left_expertsdata = ntuple(N) do i
+#         expert_sets[i][1]
+#     end
+
+#     right_expertsdata = ntuple(N) do i
+#         expert_sets[i][2]
+#     end
+
+#     MEDTNode(
+#         node.featval,
+#         node.featid,
+#         mfleft,
+#         mfright,
+#         build_medt(node.left, experts, left_expertsdata),
+#         build_medt(node.right, experts, right_expertsdata)
+#     )
+# end
 
 
 # TODO: adapt add experts to the modifications, kinda low priority rn 
