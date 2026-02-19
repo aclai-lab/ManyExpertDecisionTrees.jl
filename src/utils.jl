@@ -2,8 +2,6 @@ using DataFrames
 using Statistics
 import FuzzyLogic as FL
 
-const CONSTANT_MF = FL.PiecewiseLinearMF([(0, 1)])
-
 """
     subdivide(N, X::AbstractMatrix{S})
 
@@ -27,98 +25,27 @@ end
 
 
 """
-    function split_set(featval::Real, featid::Int, expert_set::AbstractMatrix)
+    function split_set(featval::S, featid::Int, expert_set::AbstractMatrix{S}) where {S}
 
 Given a value to split around, return the left and right resulting feature matrices.
 """
-function split_set(featval::Real, featid::Int, expert_set::AbstractMatrix)
+function split_set(featval::S, featid::Int, expert_set::AbstractMatrix{S}) where {S}
     mask = expert_set[:, featid] .<= featval
     return expert_set[mask, :], expert_set[.!mask, :]
 end
 
-function build_mfs(
-    mem_func::Type{FL.GaussianMF}, 
-    featid::Int, 
-    feat_val::Real, 
-    expertdata::AbstractMatrix; 
-    kwargs...
-)
-    leftset, rightset = split_set(feat_val, featid, expertdata)
-    split_val_fl = convert(Float64, feat_val)
 
-    # Left Branch 
-    mf_l = if size(leftset, 1) < 15
-        FL.PiecewiseLinearMF([(split_val_fl, 1.0), (split_val_fl + 1e-5, 0.0)])
-    else
-        col = leftset[:, featid]
-        mu, sigma = mean(col), std(col)
-        if isnan(mu) || isnan(sigma)
-            CONSTANT_MF
-        else
-            FL.GaussianMF(mu, sigma)
-        end
-    end
+"""
+    get_params(featid::Int, expertdata::AbstractMatrix{S}, mem_func::Type{GaussianMF})
 
-    # Right Branch
-    mf_r = if size(rightset, 1) < 15
-        FL.PiecewiseLinearMF([(split_val_fl, 0.0), (split_val_fl + 1e-5, 1.0)])
-    else
-        col = rightset[:, featid]
-        mu, sigma = mean(col), std(col)
-        if isnan(mu) || isnan(sigma)
-            CONSTANT_MF
-        else
-            FL.GaussianMF(mu, sigma)
-        end
-    end
-
-    return mf_l, mf_r, leftset, rightset
+Given a split and the feature matrix related to an expert, return the mean and variance of the two subsets
+defined by the split.
+"""
+function get_params(featid::Int, expertdata::AbstractMatrix{S}, mem_func::Type{FL.GaussianMF}) where {S}
+    featcol = expertdata[:, featid]
+    return mean(featcol), std(featcol)
 end
 
-function build_mfs(
-    mem_func::Type{FL.SigmoidMF},
-    featid::Int,
-    feat_val::Real,
-    expertdata::AbstractMatrix; 
-    slope::Union{Real, Nothing} = nothing, 
-    slope_scaling::Float64 = 1.0, 
-    kwargs...
-)
-    leftset, rightset = split_set(feat_val, featid, expertdata)
-    split_val = convert(Float64, feat_val)
-    
-    # Left Branch
-    mf_l = if !isnothing(slope)
-        FL.SigmoidMF(-abs(slope), split_val)
-    else
-        col = leftset[:, featid]
-        mu, sigma = mean(col), std(col)
-        s = -slope_scaling / (sigma / mu)
-        if isnan(s) || isinf(s)
-            CONSTANT_MF
-        else
-            FL.SigmoidMF(s, split_val)
-        end
-    end
-
-    # Right Branch
-    mf_r = if !isnothing(slope)
-        FL.SigmoidMF(abs(slope), split_val)
-    else
-        col = rightset[:, featid]
-        mu, sigma = mean(col), std(col)
-        s = slope_scaling / (sigma / mu)
-        if isnan(s) || isinf(s)
-            CONSTANT_MF
-        else
-            FL.SigmoidMF(s, split_val)
-        end
-    end
-
-    return mf_l, mf_r, leftset, rightset
-end
-
-
-function build_mfs(mem_func::Type{<:FL.AbstractMembershipFunction}, args...; kwargs...) 
+function get_params(featid::Int, expert_set::AbstractMatrix{S}, mem_func::Type{<:FL.AbstractMembershipFunction}) where {S}
     error("Currently, only Gaussian parameterization is supported. Received: $(mem_func)")
 end

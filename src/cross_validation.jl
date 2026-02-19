@@ -66,13 +66,11 @@ function montecarlocv(
     X::AbstractMatrix{S},
     y::AbstractVector{T},
     expert::FuzzyLogic,
-    mftype::Type{<:FL.AbstractMembershipFunction},
     metrics::AbstractVector{Symbol};
     n_splits::Int=50,
     apply_depth::Int=-1,
     test_size::Float64=0.3,
-    rng::Union{Int, AbstractRNG}=Random.GLOBAL_RNG,
-    kwargs...
+    rng::Union{Int, AbstractRNG}=Random.GLOBAL_RNG
 ) where {S, T}
 
     class_names = sort(unique(y))
@@ -104,7 +102,7 @@ function montecarlocv(
         end
 
         cdt = DT.build_tree(y_train, X_train, 0, -1, 5; rng=fold_rng)
-        fdt = fuzzify(cdt, X_train, mftype; kwargs...)
+        fdt = fuzzify(cdt, X_train, FL.GaussianMF)
 
         cy_pred = DT.apply_tree(cdt, X_test)
         fy_pred = apply(fdt, expert, X_test; depth=apply_depth)

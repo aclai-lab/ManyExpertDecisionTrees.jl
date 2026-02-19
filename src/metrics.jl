@@ -142,7 +142,7 @@ function getstats(
     tot_preds = 0
     tot_card = 0
     
-    # Compute vagueness 1 minus 1 over average cardinality weighted by number of instances 
+    # Compute vagueness as average cardinality weighted by number of instances 
     for c in class_cols
         count = sum(cm.matrix[:, c]) 
         k = length(cm.labels[c])
@@ -190,8 +190,8 @@ function getstats(
         return count * (1.0 / k)
     end 
 
-    FN = max(0.0, total_target_instances - TP)
-    TN = max(0.0, total_other_instances - FP)
+    FN = total_target_instances - TP
+    TN = total_other_instances - FP
 
     return ClassStats(TP, FP, TN, FN, vagueness)
 end

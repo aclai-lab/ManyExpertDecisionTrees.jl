@@ -9,7 +9,6 @@ using CSV
 using SoleLogics.ManyValuedLogics
 using PrettyTables
 using Printf
-import FuzzyLogic as FL
 
 formats = Dict(
     :latex => ".tex",
@@ -17,15 +16,7 @@ formats = Dict(
     :html => ".html"
 )
 
-function runexps(
-    outputname::String,
-    metrics::Vector{Symbol}, 
-    mftype::Type{<:FL.AbstractMembershipFunction}; 
-    n_splits::Int=50, 
-    format::Symbol=:text, 
-    rng=Random.GLOBAL_RNG,
-    kwargs...
-)
+function runexps(metrics::Vector{Symbol}; n_splits::Int=50, format::Symbol=:text, rng=Random.GLOBAL_RNG)
 
     format ∉ keys(formats) && return println("invalid output format")
 
@@ -35,7 +26,7 @@ function runexps(
 
     results_dir = joinpath(@__DIR__, "results/")
     mkpath(results_dir)
-    results_path = joinpath(results_dir, outputname * formats[format])
+    results_path = joinpath(results_dir, "results_table" * formats[format])
 
     n_metrics = length(metrics)
 
@@ -67,7 +58,7 @@ function runexps(
         # Montecarlo cv for all experts
         results = map(logics) do (name, logic)
             println("   - Evaluating $name...")
-            montecarlocv(X, y, logic, mftype, metrics; n_splits=n_splits, rng=rng, kwargs...)
+            montecarlocv(X, y, logic, metrics; n_splits=n_splits, rng=rng)
         end
 
         # Push raw results to results table (exclude vagueness from crisp)
@@ -118,6 +109,7 @@ function runexps(
     rawmean(v) = v.mean
     raw_means = rawmean.(raw_data)
 
+    # Highlighter: bold the best value per metric per row (excluding vagueness)
     function is_best(data, i, j)
         metric = col_metric_map[j]
         metric == :vagueness && return false
@@ -199,9 +191,4 @@ function runexps(
     println("\nSaved table to $results_path")
 end
 
-
-slopes = [0.5,1.0,2.5,5.0,10.0,25.0,50.0]
-
-for slope in slopes 
-    runexps("results_table_$(slope)", [:recall, :precision, :vagueness], FL.SigmoidMF; rng=69, slope_scaling=slope)
-end
+runexps([:accuracy, :recall, :precision]; format=:text)
