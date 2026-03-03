@@ -1,3 +1,5 @@
+using SoleLogics.ManyValuedLogics
+
 """
     struct ConfusionMatrix{T}
         classes::Vector{T}
@@ -14,6 +16,94 @@ struct ConfusionMatrix{T}
     labels::Vector{Vector{T}}
     matrix::Matrix{Int}
 end
+
+# Useful for crossvalidation steps
+function Base.convert(
+    ::Type{ManyExpertDecisionTrees.ConfusionMatrix{T}}, 
+    cm::DecisionTree.ConfusionMatrix;
+    classes::Union{Nothing, AbstractVector{T}}=nothing
+) where {T}
+    dt_classes = map(x -> convert(T, x), cm.classes)
+
+    if classes === nothing
+        labels = Vector{Vector{T}}([[l] for l in dt_classes])
+        return ConfusionMatrix(dt_classes, labels, cm.matrix)
+    end
+
+    global_classes = sort(classes)
+    labels = Vector{Vector{T}}([[l] for l in global_classes])
+    N = length(global_classes)
+
+    matrix = zeros(Int, N, N)
+
+    # Remapping matrix
+    for (dt_row, dc1) in enumerate(dt_classes)
+
+        global_row = findfirst(==(dc1), global_classes)
+        global_row === nothing && continue
+
+        for (dt_col, dc2) in enumerate(dt_classes)
+
+            global_col = findfirst(==(dc2), global_classes)
+            global_col === nothing && continue
+
+            matrix[global_row, global_col] = cm.matrix[dt_row, dt_col]
+        end
+    end
+
+    return ConfusionMatrix(global_classes, labels, matrix)
+end
+
+
+"""
+function confusionmatrix(
+        actual::AbstractVector{T}, 
+        predicted::AbstractVector{<:AbstractVector{T}};
+        classes::Union{Nothing, AbstractVector{T}}=nothing
+    ) where {T}
+
+Given an array of actual labels and an arry of predicted label subsets, construct 
+a rectangular confusion matrix. Optionally, if given the complete class set, 
+construct a complete confusion matrix
+"""
+function confusionmatrix(
+    actual::AbstractVector{T}, 
+    predicted::AbstractVector{<:AbstractVector{T}};
+    classes::Union{Nothing, AbstractVector{T}}=nothing
+) where {T}
+
+    classes = isnothing(classes) ? Vector{T}(sort(unique(actual))) : Vector{T}(sort(classes))
+    N = length(classes)
+
+    base_labels = [ [l] for l in classes ]
+
+    vague_labels = collect(unique(predicted))
+    filter!(l -> l ∉ base_labels, vague_labels)
+    sort!(vague_labels)
+    
+    labels = Vector{Vector{T}}(vcat(base_labels, vague_labels))
+    
+    M = length(labels)
+    
+    _actual = zeros(Int, length(actual))
+    _pred = zeros(Int, length(predicted))
+    
+    for i in 1:N
+        _actual[actual .== classes[i]] .= i
+    end
+    
+    for i in 1:M
+        _pred[predicted .== Ref(labels[i])] .= i
+    end
+    
+    CM = zeros(Int, N, M)
+    for i in zip(_actual, _pred)
+        CM[i[1], i[2]] += 1
+    end
+    
+    return ConfusionMatrix(classes, labels, CM)
+end
+
 
 """
     struct ClassStats
@@ -35,48 +125,6 @@ struct ClassStats
     vagueness::Float64
 end
 
-"""
-    function confusionmatrix(
-        actual::AbstractVector{T}, 
-        predicted::AbstractVector{<:AbstractVector{T}}
-    ) where {T}
-
-Given an array of actual labels and an arry of predicted label subsets, construct 
-a rectangular confusion matrix.
-"""
-function confusionmatrix(
-    actual::AbstractVector{T}, 
-    predicted::AbstractVector{<:AbstractVector{T}}
-) where {T}
-
-    classes = Vector{T}(sort(unique(actual)))
-    N = length(classes)
-
-    # Ensure labels are explicitly Vector{Vector{T}} for struct compatibility
-    labels_raw = unique(vcat([ [l] for l in classes ], predicted))
-    labels = Vector{Vector{T}}(map(x -> Vector{T}(x), labels_raw))
-    sort!(labels)
-    
-    M = length(labels)
-
-    _actual = zeros(Int, length(actual))
-    _pred = zeros(Int, length(predicted))
-
-    for i in 1:N
-        _actual[actual .== classes[i]] .= i
-    end
-
-    for i in 1:M
-        _pred[predicted .== Ref(labels[i])] .= i
-    end
-
-    CM = zeros(Int, N, M)
-    for i in zip(_actual, _pred)
-        CM[i[1], i[2]] += 1
-    end
-
-    return ConfusionMatrix(classes, labels, CM)
-end
 
 """
     function getstats(
@@ -84,7 +132,30 @@ end
         target_class
     )::ClassStats where {T} 
 
-Compute statistics associated with a given class. Returns a ClassStats container
+Compute statistics associated with a given class.    
+In the "fuzzy"/"multilabel" scenario, confusion matrix statistics have been
+generalized to account for both crisp and vague classifications. Thus, we've 
+defined:
+    - TP: in the row associated with the target class, sum the predictions 
+        that contain the target class weighted by 1/k, where k is the cardinality
+        of the set of predicted labels.
+
+    - FP: in all other rows beside the one associated with the target, sum 
+        predictions that contain the target class weighted by 1/k, where k is the
+        cardinality of the predicted set.
+
+    - TN: in all other rows beside the one associated with the target, 
+        classifications that don't contain the target class score 1; classifications 
+        that contain the target class score 1 - 1/k.
+
+    - FN: in the row associated with the target class, classifications that 
+        don't contain the target class score 1; classifications that contain the 
+        target class score 1 - 1/k.
+
+Note that: 
+- TP + FN = n° of instances associated with the taret, while
+- FP + TN = n° of all other instances
+    
 """
 function getstats(
     cm::ConfusionMatrix{T}, 
@@ -106,7 +177,7 @@ function getstats(
     tot_preds = 0
     tot_card = 0
     
-    # Compute vagueness as average cardinality weighted by number of instances 
+    # Compute vagueness 1 minus 1 over average cardinality weighted by number of instances 
     for c in class_cols
         count = sum(cm.matrix[:, c]) 
         k = length(cm.labels[c])
@@ -114,33 +185,8 @@ function getstats(
         tot_card += count * k
     end
     
-    vagueness = tot_preds == 0 ? 0.0 : tot_card / tot_preds
+    vagueness = tot_preds == 0 ? 0.0 : 1 - (1/( tot_card / tot_preds))
     
-    #= 
-        In the "fuzzy"/"multilabel" scenario, confusion matrix statistics have been
-        generalized to account for both crisp and vague classifications. Thus, we've 
-        defined:
-           - TP: in the row associated with the target class, sum the predictions 
-             that contain the target class weighted by 1/k, where k is the cardinality
-             of the set of predicted labels.
-
-           - FP: in all other rows beside the one associated with the target, sum 
-             predictions that contain the target class weighted by 1/k, where k is the
-             cardinality of the predicted set.
-
-           - TN: in all other rows beside the one associated with the target, 
-             classifications that don't contain the target class score 1; classifications 
-             that contain the target class score 1 - 1/k.
-
-           - FN: in the row associated with the target class, classifications that 
-             don't contain the target class score 1; classifications that contain the 
-             target class score 1 - 1/k.
-        
-        Note that: 
-        - TP + FN = n° of instances associated with the taret, while
-        - FP + TN = n° of all other instances
-    =#
-
     TP = sum(class_cols; init=0.0) do c
         count = cm.matrix[row, c]
         k = length(cm.labels[c])
@@ -154,12 +200,13 @@ function getstats(
         return count * (1.0 / k)
     end 
 
-    FN = total_target_instances - TP
-    TN = total_other_instances - FP
+    FN = max(0.0, total_target_instances - TP)
+    TN = max(0.0, total_other_instances - FP)
 
     return ClassStats(TP, FP, TN, FN, vagueness)
 end
 
+# Single class Metrics
 accuracy(stats::ClassStats)    = (stats.TP + stats.FP + stats.TN + stats.FN) == 0 ? 0.0 : (stats.TP + stats.TN) / (stats.TP + stats.TN + stats.FP + stats.FN)
 precision(stats::ClassStats)   = (stats.TP + stats.FP) == 0 ? 0.0 : stats.TP / (stats.TP + stats.FP)
 recall(stats::ClassStats)      = (stats.TP + stats.FN) == 0 ? 0.0 : stats.TP / (stats.TP + stats.FN)
@@ -174,6 +221,8 @@ vagueness(cm::ConfusionMatrix, target_class)   = vagueness(getstats(cm, target_c
 # specificity(cm::ConfusionMatrix, target_class) = specificity(getstats(cm, target_class))
 # f1_score(cm::ConfusionMatrix, target_class)    = f1_score(getstats(cm, target_class))
 
-
-
-
+# Macro averaged metrics
+accuracy(cm::ConfusionMatrix)  = mean(accuracy(cm, c) for c in cm.classes)
+precision(cm::ConfusionMatrix) = mean(precision(cm, c) for c in cm.classes)
+recall(cm::ConfusionMatrix)    = mean(recall(cm, c) for c in cm.classes)
+vagueness(cm::ConfusionMatrix) = mean(vagueness(cm, c) for c in cm.classes)

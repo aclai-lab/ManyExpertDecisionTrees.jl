@@ -15,11 +15,14 @@ export manify, fuzzify
 include("manify.jl")
 include("utils.jl")
 
-export apply 
+export apply
 
 include("apply.jl")
 
-export predict, ConfusionMatrix, confusion_matrix
+export ConfusionMatrix, confusionmatrix, accuracy, recall, precision, vagueness
 include("metrics.jl")
+
+export montecarlocv 
+include("cross_validation.jl")
 
 end

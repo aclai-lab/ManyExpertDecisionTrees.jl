@@ -25,7 +25,6 @@ using SoleLogics.ManyValuedLogics
 using MLJ
 using DecisionTree
 import FuzzyLogic as FL
-using Profile
 
 function main()
     n_runs = 10  
@@ -99,8 +98,8 @@ function main()
 
                 medt = manify(dt, X_train, mf_experts...)
 
-                y_pred = map(eachrow(X_test_matrix)) do row
-                    result = apply(medt, MXA, row)
+                y_pred = map(eachrow(X_test)) do row
+                    result = apply(medt, MXA, row; depth=2)
                     return length(result) != 1 ? :vague : first(result)
                 end
 

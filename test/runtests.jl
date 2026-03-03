@@ -23,18 +23,30 @@ import DecisionTree: build_tree
         @test size(parts[1], 1) == 10
     end
     
-    @testset "get_params" begin
-        X = reshape([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 6, 1)
-        
-        μ, σ = ManyExpertDecisionTrees.get_params(1, X, FL.GaussianMF)
-        
-        @test μ ≈ 3.5  
-        @test σ > 0    
-        @test σ ≈ std([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-        
-        # Test error for unsupported membership function
-        @test_throws ErrorException ManyExpertDecisionTrees.get_params(
-            1, X, FL.TriangularMF
+    @testset "build_mfs" begin
+        X = reshape(collect(1.0:40.0), 40, 1)
+
+        featid = 1
+        feat_val = 20.5
+
+        mf_l, mf_r, leftset, rightset = ManyExpertDecisionTrees.build_mfs(
+            FL.GaussianMF,
+            featid,
+            feat_val,
+            X
+        )
+
+        @test mf_l isa FL.GaussianMF
+        @test mf_r isa FL.GaussianMF
+        @test size(leftset, 1) + size(rightset, 1) == size(X, 1)
+        @test all(leftset[:, featid] .<= feat_val)
+        @test all(rightset[:, featid] .> feat_val)
+
+        @test_throws ErrorException ManyExpertDecisionTrees.build_mfs(
+            FL.TriangularMF,
+            featid,
+            feat_val,
+            X
         )
     end
     
@@ -84,7 +96,7 @@ import DecisionTree: build_tree
         struct FakeMF{N}  
         end
         
-        @test_throws ErrorException ManyExpertDecisionTrees.ManyExpertDecisionTree(leaf, 2, FakeMF, FakeMF)
+        @test_throws ErrorException ManyExpertDecisionTrees.ManyExpertDecisionTree{Int, Int}(leaf, 2, FakeMF, FakeMF)
 
     end
     
@@ -97,36 +109,36 @@ import DecisionTree: build_tree
         dt = build_tree(y, X)
         medt = manify(dt, X, FL.GaussianMF, FL.GaussianMF)
         
-        MXA = ManyExpertAlgebra(GodelLogic, GodelLogic)
+        experts = (GodelLogic, GodelLogic)
         
         instance1 = [1.5, 1.0]
-        result1 = apply(medt, MXA, instance1)
+        result1 = apply(medt, experts, instance1)
         
         @test result1 isa Vector
         @test !isempty(result1)
         
         instance2 = [5.0, 3.0]
-        result2 = apply(medt, MXA, instance2)
+        result2 = apply(medt, experts, instance2)
         
         @test result2 isa Vector
         @test !isempty(result2)
         
         wrong_dim_instance = [1.0]  
-        @test_throws ErrorException apply(medt, MXA, wrong_dim_instance)
+        @test_throws ErrorException apply(medt, experts, wrong_dim_instance)
         
-        MXA_wrong = ManyExpertAlgebra(GodelLogic)
-        @test_throws ErrorException apply(medt, MXA_wrong, instance1)
+        experts_wrong = (GodelLogic,)
+        @test_throws ErrorException apply(medt, experts_wrong, instance1)
         
         medt3 = manify(dt, X, FL.GaussianMF, FL.GaussianMF, FL.GaussianMF)
-        MXA3 = ManyExpertAlgebra(GodelLogic, ProductLogic, LukasiewiczLogic)
+        experts = (GodelLogic, ProductLogic, LukasiewiczLogic)
         
-        result3 = apply(medt3, MXA3, instance1)
+        result3 = apply(medt3, experts, instance1)
         @test result3 isa Vector
         @test !isempty(result3)
 
         medt4 = fuzzify(dt, X, FL.GaussianMF)
-        MXA4 = ManyExpertAlgebra(GodelLogic)
-        result4 = apply(medt4, MXA4, instance1)
+        expert = GodelLogic
+        result4 = apply(medt4, expert, instance1; depth=2)
         @test result4 isa Vector
         @test !isempty(result4)
     end
