@@ -3,7 +3,12 @@ using DataFrames
 import FuzzyLogic as FL
 
 """
-    manify(dt::DecisionTree.Root, X::AbstractMatrix, experts::UnionAll...)
+    function manify(
+        dt::DecisionTree.Root{S, T}, 
+        X::AbstractMatrix{S}, 
+        experts::UnionAll...;
+        kwargs...
+    )::ManyExpertDecisionTree where {S}
 
 Convert a DecisionTree.jl decision tree into a ManyExpertDecisionTree by attaching 
 N membership functions per node, parameterized from subdivisions of X. 
@@ -22,14 +27,19 @@ function manify(
     root = build_medt(dt.node, experts, expertsdata; kwargs...)
 
     if root isa MEDTLeaf
-        return ManyExpertDecisionTree{typeof(root.label), S}(root, size(X, 2), experts...)
+        return ManyExpertDecisionTree{S, typeof(root.label)}(root, size(X, 2), experts...)
     end
 
     return ManyExpertDecisionTree(root, size(X, 2), experts...)
 end
 
 """
-    fuzzify(dt::DecisionTree.Root, X::AbstractMatrix{S}, expert::UnionAll; kwargs...) 
+    function fuzzify(
+        dt::DecisionTree.Root,
+        X::AbstractMatrix{S}, 
+        expert::UnionAll; 
+        kwargs...
+    ) where {S}
 
 Convert a DecisionTree.jl decision tree into a FuzzyTree, which is a ManyExpertDecisionTree with 
 a single expert. 

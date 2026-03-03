@@ -41,7 +41,6 @@ function Base.show(io::IO, res::CVResults)
         end
     end
 
-    header = String.(res.metrics)
     
     println(io, "\n--- Crisp Results ---")
     pretty_table(
@@ -71,6 +70,13 @@ function montecarlocv(
     n_splits::Int=50,
     apply_depth::Int=-1,
     test_size::Float64=0.3,
+    #Crisp tree specific args#
+    n_subfeatures=0,
+    max_depth=-1,
+    min_samples_leaf=1,
+    min_samples_split=2,
+    min_purity_increase=0.0,
+    ##########################
     rng::Union{Int, AbstractRNG}=Random.GLOBAL_RNG,
     kwargs...
 ) where {S, T}
@@ -81,20 +87,21 @@ function montecarlocv(
     
     n_rows = length(row_labels)
     n_cols = length(metrics)
-    train_size = 1 - test_size
+    train_size = 1.0 - test_size
 
     fuzzy_scores = Array{Float64}(undef, n_splits, n_rows, n_cols)
     crisp_scores = Array{Float64}(undef, n_splits, n_rows, n_cols)
     
     raw_folds = Vector{NamedTuple{(:fuzzy, :crisp), Tuple{ConfusionMatrix{T}, ConfusionMatrix{T}}}}(undef, n_splits)
 
-    Threads.@threads for i in ProgressBar(1:n_splits)
+    seeds = if rng isa Integer
+        [rng + i for i in 1:n_splits]
+    else
+        [rand(rng, UInt32) + UInt32(i) for i in 1:n_splits]
+    end
 
-        fold_rng = if rng isa Integer
-            Random.MersenneTwister(rng + i)
-        else
-            Random.MersenneTwister(rand(rng, UInt32) + i)
-        end
+    Threads.@threads for i in ProgressBar(1:n_splits)
+        fold_rng = Random.MersenneTwister(seeds[i])
 
         X_train, y_train, X_test, y_test = begin
             train, test = partition(eachindex(y), train_size, shuffle=true, rng=fold_rng)
@@ -103,7 +110,17 @@ function montecarlocv(
             X_train, y_train, X_test, y_test
         end
 
-        cdt = DT.build_tree(y_train, X_train, 0, -1, 5; rng=fold_rng)
+        cdt = DT.build_tree(
+            y_train, 
+            X_train, 
+            n_subfeatures, 
+            max_depth, 
+            min_samples_leaf, 
+            min_samples_split, 
+            min_purity_increase; 
+            rng=fold_rng
+        )
+
         fdt = fuzzify(cdt, X_train, mftype; kwargs...)
 
         cy_pred = DT.apply_tree(cdt, X_test)

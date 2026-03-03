@@ -17,6 +17,7 @@ struct ConfusionMatrix{T}
     matrix::Matrix{Int}
 end
 
+# Useful for crossvalidation steps
 function Base.convert(
     ::Type{ManyExpertDecisionTrees.ConfusionMatrix{T}}, 
     cm::DecisionTree.ConfusionMatrix;
@@ -32,20 +33,77 @@ function Base.convert(
     global_classes = sort(classes)
     labels = Vector{Vector{T}}([[l] for l in global_classes])
     N = length(global_classes)
+
     matrix = zeros(Int, N, N)
 
-    for (di, dc) in enumerate(dt_classes)
-        gi = findfirst(==(dc), global_classes)
-        gi === nothing && continue
-        for (dj, dc2) in enumerate(dt_classes)
-            gj = findfirst(==(dc2), global_classes)
-            gj === nothing && continue
-            matrix[gi, gj] = cm.matrix[di, dj]
+    # Remapping matrix
+    for (dt_row, dc1) in enumerate(dt_classes)
+
+        global_row = findfirst(==(dc1), global_classes)
+        global_row === nothing && continue
+
+        for (dt_col, dc2) in enumerate(dt_classes)
+
+            global_col = findfirst(==(dc2), global_classes)
+            global_col === nothing && continue
+
+            matrix[global_row, global_col] = cm.matrix[dt_row, dt_col]
         end
     end
 
     return ConfusionMatrix(global_classes, labels, matrix)
 end
+
+
+"""
+function confusionmatrix(
+        actual::AbstractVector{T}, 
+        predicted::AbstractVector{<:AbstractVector{T}};
+        classes::Union{Nothing, AbstractVector{T}}=nothing
+    ) where {T}
+
+Given an array of actual labels and an arry of predicted label subsets, construct 
+a rectangular confusion matrix. Optionally, if given the complete class set, 
+construct a complete confusion matrix
+"""
+function confusionmatrix(
+    actual::AbstractVector{T}, 
+    predicted::AbstractVector{<:AbstractVector{T}};
+    classes::Union{Nothing, AbstractVector{T}}=nothing
+) where {T}
+
+    classes = isnothing(classes) ? Vector{T}(sort(unique(actual))) : Vector{T}(sort(classes))
+    N = length(classes)
+
+    base_labels = [ [l] for l in classes ]
+
+    vague_labels = collect(unique(predicted))
+    filter!(l -> l ∉ base_labels, vague_labels)
+    sort!(vague_labels)
+    
+    labels = Vector{Vector{T}}(vcat(base_labels, vague_labels))
+    
+    M = length(labels)
+    
+    _actual = zeros(Int, length(actual))
+    _pred = zeros(Int, length(predicted))
+    
+    for i in 1:N
+        _actual[actual .== classes[i]] .= i
+    end
+    
+    for i in 1:M
+        _pred[predicted .== Ref(labels[i])] .= i
+    end
+    
+    CM = zeros(Int, N, M)
+    for i in zip(_actual, _pred)
+        CM[i[1], i[2]] += 1
+    end
+    
+    return ConfusionMatrix(classes, labels, CM)
+end
+
 
 """
     struct ClassStats
@@ -67,52 +125,6 @@ struct ClassStats
     vagueness::Float64
 end
 
-"""
-    function confusionmatrix(
-        actual::AbstractVector{T}, 
-        predicted::AbstractVector{<:AbstractVector{T}}
-    ) where {T}
-
-Given an array of actual labels and an arry of predicted label subsets, construct 
-a rectangular confusion matrix.
-"""
-function confusionmatrix(
-    actual::AbstractVector{T}, 
-    predicted::AbstractVector{<:AbstractVector{T}};
-    classes::Union{Nothing, AbstractVector{T}}=nothing
-) where {T}
-
-    classes = isnothing(classes) ? Vector{T}(sort(unique(actual))) : Vector{T}(sort(classes))
-    N = length(classes)
-
-    certain_labels = [ [l] for l in classes ]
-
-    other_labels = unique([Vector{T}(p) for p in predicted ])
-    filter!(l -> !(l in certain_labels), other_labels)
-    sort!(other_labels)
-
-    labels = Vector{Vector{T}}(vcat(certain_labels, other_labels))
-    
-    M = length(labels)
-
-    _actual = zeros(Int, length(actual))
-    _pred = zeros(Int, length(predicted))
-
-    for i in 1:N
-        _actual[actual .== classes[i]] .= i
-    end
-
-    for i in 1:M
-        _pred[predicted .== Ref(labels[i])] .= i
-    end
-
-    CM = zeros(Int, N, M)
-    for i in zip(_actual, _pred)
-        CM[i[1], i[2]] += 1
-    end
-
-    return ConfusionMatrix(classes, labels, CM)
-end
 
 """
     function getstats(
@@ -120,7 +132,30 @@ end
         target_class
     )::ClassStats where {T} 
 
-Compute statistics associated with a given class. Returns a ClassStats container
+Compute statistics associated with a given class.    
+In the "fuzzy"/"multilabel" scenario, confusion matrix statistics have been
+generalized to account for both crisp and vague classifications. Thus, we've 
+defined:
+    - TP: in the row associated with the target class, sum the predictions 
+        that contain the target class weighted by 1/k, where k is the cardinality
+        of the set of predicted labels.
+
+    - FP: in all other rows beside the one associated with the target, sum 
+        predictions that contain the target class weighted by 1/k, where k is the
+        cardinality of the predicted set.
+
+    - TN: in all other rows beside the one associated with the target, 
+        classifications that don't contain the target class score 1; classifications 
+        that contain the target class score 1 - 1/k.
+
+    - FN: in the row associated with the target class, classifications that 
+        don't contain the target class score 1; classifications that contain the 
+        target class score 1 - 1/k.
+
+Note that: 
+- TP + FN = n° of instances associated with the taret, while
+- FP + TN = n° of all other instances
+    
 """
 function getstats(
     cm::ConfusionMatrix{T}, 
@@ -152,31 +187,6 @@ function getstats(
     
     vagueness = tot_preds == 0 ? 0.0 : 1 - (1/( tot_card / tot_preds))
     
-    #= 
-        In the "fuzzy"/"multilabel" scenario, confusion matrix statistics have been
-        generalized to account for both crisp and vague classifications. Thus, we've 
-        defined:
-           - TP: in the row associated with the target class, sum the predictions 
-             that contain the target class weighted by 1/k, where k is the cardinality
-             of the set of predicted labels.
-
-           - FP: in all other rows beside the one associated with the target, sum 
-             predictions that contain the target class weighted by 1/k, where k is the
-             cardinality of the predicted set.
-
-           - TN: in all other rows beside the one associated with the target, 
-             classifications that don't contain the target class score 1; classifications 
-             that contain the target class score 1 - 1/k.
-
-           - FN: in the row associated with the target class, classifications that 
-             don't contain the target class score 1; classifications that contain the 
-             target class score 1 - 1/k.
-        
-        Note that: 
-        - TP + FN = n° of instances associated with the taret, while
-        - FP + TN = n° of all other instances
-    =#
-
     TP = sum(class_cols; init=0.0) do c
         count = cm.matrix[row, c]
         k = length(cm.labels[c])

@@ -1,50 +1,50 @@
 using SoleLogics.ManyValuedLogics
 
 function apply(
-    tree::ManyExpertDecisionTree{T, S},
+    tree::ManyExpertDecisionTree{S, T},
     expert::FuzzyLogic,
     X::AbstractMatrix;
     depth=-1
-) where {T, S}
+) where {S, T}
 
     MXA = ManyExpertAlgebra(expert)
     return [apply(tree, MXA, row; depth) for row in eachrow(X)]
 end
 
 function apply(
-    tree::ManyExpertDecisionTree{T, S},
+    tree::ManyExpertDecisionTree{S, T},
     experts::NTuple{N, FuzzyLogic}, 
     X::AbstractMatrix;
     depth=-1
-) where {T, S, N}
+) where {S, T, N}
 
     MXA = ManyExpertAlgebra(experts...)
     return [apply(tree, MXA, row; depth) for row in eachrow(X)]
 end
 
 function apply(
-    tree::ManyExpertDecisionTree{T, S},
+    tree::ManyExpertDecisionTree{S, T},
     algebra::ManyExpertAlgebra,
     X::AbstractMatrix;
     depth=-1
-) where {T, S}
+) where {S, T}
 
     return [apply(tree, algebra, row; depth) for row in eachrow(X)]
 end
 
 function apply(
-    tree::ManyExpertDecisionTree{T, S}, 
+    tree::ManyExpertDecisionTree{S, T}, 
     expert::FuzzyLogic, 
     instance::AbstractVector; 
     depth=-1
-) where {T, S}
+) where {S, T}
 
     MXA = ManyExpertAlgebra(expert)
     apply(tree, MXA, instance; depth=depth)
 end
 
 function apply(
-    tree::ManyExpertDecisionTree{T, S}, 
+    tree::ManyExpertDecisionTree{S, T}, 
     experts::NTuple{N, FuzzyLogic}, 
     instance::AbstractVector; 
     depth=-1
@@ -55,11 +55,11 @@ function apply(
 end
 
 function apply(
-    tree::ManyExpertDecisionTree{T, S}, 
+    tree::ManyExpertDecisionTree{S, T}, 
     MXA::ManyExpertAlgebra, 
     instance::AbstractVector; 
     depth=-1
-) where {T, S}
+) where {S, T}
     
     (depth == -1 || depth > 0) ||
     error("Invalid depth: invalid depth value")
@@ -73,7 +73,7 @@ function apply(
     N = length(MXA.experts)
 
     solutions = Vector{Pair{MEDTLeaf{T}, NTuple{N, ContinuousTruth}}}()
-    queue = Vector{Pair{MEDTLeafOrNode{T, S}, NTuple{N, ContinuousTruth}}}()
+    queue = Vector{Pair{MEDTLeafOrNode{S, T}, NTuple{N, ContinuousTruth}}}()
 
     # Add the root to the queue
     pushfirst!(queue, tree.root => top(MXA))
@@ -167,10 +167,10 @@ function pushpareto!(
 end
 
 function pushpareto!(
-    solutions::Vector{Pair{MEDTLeafOrNode{T, S}, NTuple{N, ContinuousTruth}}},
-    node_mmdg::Pair{<:MEDTLeafOrNode{T, S}, NTuple{N, ContinuousTruth}},
+    solutions::Vector{Pair{MEDTLeafOrNode{S, T}, NTuple{N, ContinuousTruth}}},
+    node_mmdg::Pair{<:MEDTLeafOrNode{S, T}, NTuple{N, ContinuousTruth}},
     MXA
-) where {T, S, N}
+) where {S, T, N}
     
     node, mmdg = node_mmdg
     

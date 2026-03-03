@@ -17,16 +17,15 @@ formats = Dict(
     :html => ".html"
 )
 
+
+
 function runexps(
     outputname::String,
     metrics::Vector{Symbol}, 
     mftype::Type{<:FL.AbstractMembershipFunction}; 
-    n_splits::Int=50, 
     format::Symbol=:text, 
-    rng=Random.GLOBAL_RNG,
     kwargs...
 )
-
     format ∉ keys(formats) && return println("invalid output format")
 
     data_dir = joinpath(@__DIR__, "datasets/processed/")
@@ -67,7 +66,7 @@ function runexps(
         # Montecarlo cv for all experts
         results = map(logics) do (name, logic)
             println("   - Evaluating $name...")
-            montecarlocv(X, y, logic, mftype, metrics; n_splits=n_splits, rng=rng, kwargs...)
+            montecarlocv(X, y, logic, mftype, metrics; kwargs...)
         end
 
         # Push raw results to results table (exclude vagueness from crisp)
@@ -200,8 +199,12 @@ function runexps(
 end
 
 
-slopes = [0.5,1.0,2.5,5.0,10.0,25.0,50.0]
 
-for slope in slopes 
-    runexps("results_table_$(slope)", [:recall, :precision, :vagueness], FL.SigmoidMF; rng=69, slope_scaling=slope)
-end
+runexps(
+    "results_table", 
+    [:accuracy, :recall, :precision], 
+    FL.SigmoidMF; slope=2.5, 
+    test_size=0.5,
+    #Crisp tree specific args#
+    min_samples_leaf=5,
+    rng=69)

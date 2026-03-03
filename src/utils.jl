@@ -94,7 +94,7 @@ function build_mfs(
         col = leftset[:, featid]
         mu, sigma = mean(col), std(col)
         s = -slope_scaling / (sigma / mu)
-        if isnan(s) || isinf(s)
+        if isnan(s) 
             CONSTANT_MF
         else
             FL.SigmoidMF(s, split_val)
@@ -108,7 +108,7 @@ function build_mfs(
         col = rightset[:, featid]
         mu, sigma = mean(col), std(col)
         s = slope_scaling / (sigma / mu)
-        if isnan(s) || isinf(s)
+        if isnan(s)
             CONSTANT_MF
         else
             FL.SigmoidMF(s, split_val)

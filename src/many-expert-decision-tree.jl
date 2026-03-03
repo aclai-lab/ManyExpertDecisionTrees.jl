@@ -13,55 +13,56 @@ struct MEDTLeaf{T}
 end
 
 """
-    struct MEDTNode{T, S}
+    struct MEDTNode{S, T}
         featval::S
         featid::Int
         mfleft::Vector{FuzzyLogic.AbstractMembershipFunction}
         mfright::Vector{FuzzyLogic.AbstractMembershipFunction}
-        left::Union{MEDTNode{T, S}, MEDTLeaf{T}}
-        right::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+        left::Union{MEDTNode{S, T}, MEDTLeaf{T}}
+        right::Union{MEDTNode{S, T}, MEDTLeaf{T}}
     end
 
 A node structure that stores information about the corresponding split, as well as references
 to its child nodes and the N membership functions associated with its branches.
 """
-struct MEDTNode{T, S}
+struct MEDTNode{S, T}
     featval::S
     featid::Int
     mfleft::Vector{FL.AbstractMembershipFunction}
     mfright::Vector{FL.AbstractMembershipFunction}
-    left::Union{MEDTNode{T, S}, MEDTLeaf{T}}
-    right::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+    left::Union{MEDTNode{S, T}, MEDTLeaf{T}}
+    right::Union{MEDTNode{S, T}, MEDTLeaf{T}}
 end
 
 # Union type for nodes 
-const MEDTLeafOrNode{T,S} = Union{MEDTLeaf{T}, MEDTNode{T,S}}
-
+const MEDTLeafOrNode{S, T} = Union{MEDTLeaf{T}, MEDTNode{S, T}}
 
 """
-    struct ManyExpertDecisionTree{T, S}
-        root::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+    struct ManyExpertDecisionTree{S, T}
+        root::Union{MEDTNode{S, T}, MEDTLeaf{T}}
         nfeats::Int
         mftypes::Vector{DataType}
     end
 
-A MEDT is a DecisionTree-like structure that implements concepts from Many-Valued and Fuzzy Logics, 
-such as membership functions and partial ordering of truth values. In a MEDT, classical crisp splits
-are replaced by fuzzy splits, allowing partial membership of instances to multiple branches. 
-The degree of membership of an instance to a branch is defined by the corresponding membership functions,
-each of which is associated with a different expert and parameterized on a different subset of data.
+A MEDT is a DecisionTree-like structure that implements concepts from Many-Valued 
+and Fuzzy Logics, such as membership functions and partial ordering of truth 
+values. In a MEDT, classical crisp splitsare replaced by fuzzy splits, allowing 
+partial membership of instances to multiple branches. The degree of membership of 
+an instance to a branch is defined by the corresponding membership functions, each 
+of which is associated with a different expert and parameterized on a different
+subset of data.
 """
-struct ManyExpertDecisionTree{T, S}
-    root::Union{MEDTNode{T, S}, MEDTLeaf{T}}
+struct ManyExpertDecisionTree{S, T}
+    root::MEDTLeafOrNode{S, T} # I'd like to handle type ambiguity a bit better
     nfeats::Int
     mftypes::Vector{DataType}
 
-    function ManyExpertDecisionTree(
-        root::Union{MEDTNode{T, S}, MEDTLeaf{T}},
+    function ManyExpertDecisionTree{S, T}(
+        root::MEDTLeafOrNode{S, T},
         nfeats::Int,
         mftypes::UnionAll...
         ) where {
-            T, S
+            S, T
         } 
 
         for f in mftypes
@@ -69,8 +70,20 @@ struct ManyExpertDecisionTree{T, S}
                 error("Unsupported Membership Function: only functions defined in the FuzzyLogic package are currently supported")
             end
         end
-        return new{T, S}(root, nfeats, [mftypes[i]{Float64} for i in 1:length(mftypes)])
+        return new{S, T}(root, nfeats, [mftypes[i]{Float64} for i in 1:length(mftypes)])
     end
+
+    function ManyExpertDecisionTree(
+        root::MEDTLeafOrNode{S, T},
+        nfeats::Int,
+        mftypes::UnionAll...
+        ) where {
+            S, T
+        } 
+
+        return ManyExpertDecisionTree{S, T}(root, nfeats, mftypes...)
+    end
+    
 end
 
 
