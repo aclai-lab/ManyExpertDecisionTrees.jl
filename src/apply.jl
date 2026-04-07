@@ -55,6 +55,106 @@ function apply(
 end
 
 function apply(
+    tree::ManyExpertDecisionTree{S, T},
+    MXA::ManyExpertAlgebra,
+    instance::AbstractVector;
+    depth=-1
+) where {S, T <: AbstractFloat}
+    
+    (depth == -1 || depth > 0) ||
+    error("Invalid depth: invalid depth value")
+
+    length(tree.mftypes) == length(MXA.experts) || 
+    error("Expert mismatch: expected $(length(tree.mftypes)) experts, got $(length(MXA.experts))")
+    
+    length(instance) == tree.nfeats ||
+    error("Instance dimension mismatch: expected $(tree.nfeats) features, got $(length(instance))")
+
+    N = length(MXA.experts)
+
+    solutions = Vector{Pair{MEDTLeaf{T}, NTuple{N, ContinuousTruth}}}()
+    queue = Vector{Pair{MEDTLeafOrNode{S, T}, NTuple{N, ContinuousTruth}}}()
+
+    # Add the root to the queue
+    pushfirst!(queue, tree.root => top(MXA))
+
+    lvl = 0
+    while !isempty(queue)
+        
+        # If i reached the desired depth, prune out the dominated branches
+        if lvl == depth
+            local_maxima = empty(queue)
+
+            for (node, mmdg) in queue 
+                if node isa MEDTLeaf
+                    push!(solutions, node => mmdg)
+                    continue
+                end
+
+                pushpareto!(local_maxima, node => mmdg, MXA)
+            end
+
+            # Reset the queue
+            queue = local_maxima
+
+            # Reset the depth, so this step can be repeated
+            lvl = 0
+        end
+        
+        # All nodes in the queue while inside the outer loop are at the same level
+        level_size = length(queue)
+
+        # Repeat inner loop until all nodes at depth k have been explored
+        while level_size != 0
+            node, mmdg = pop!(queue)
+            
+            # If node is a leaf, add it to the solutions and skip to next node at that level
+            if node isa MEDTLeaf
+                push!(solutions, node => mmdg)
+                level_size -= 1
+                continue 
+            end
+
+            # If i've reached this point, the node isn't a leaf. 
+            feat_val = instance[node.featid]
+
+            # Compute local membership degrees for right and left children
+            mmdgleft = ntuple(i -> ContinuousTruth(node.mfleft[i](feat_val)), N)
+            mmdgright = ntuple(i -> ContinuousTruth(node.mfright[i](feat_val)), N)
+
+            # Global membership degrees are the conjuction of father and children mmdgs
+            mmdgleft = SoleLogics.collatetruth(∧, (mmdg, mmdgleft), MXA)
+            mmdgright = SoleLogics.collatetruth(∧, (mmdg, mmdgright), MXA)
+
+            # Add children nodes and their global mmdgs to queue
+            pushfirst!(queue, node.left => mmdgleft, node.right => mmdgright)
+            
+            level_size -= 1
+        end
+        
+        # If inner loop has finished, i went down 1 level
+        lvl += 1
+    end
+
+    isempty(solutions) && error("No solution leaves found for regression prediction")
+
+    weighted_sum = 0.0
+    total_weight = 0.0
+
+    @inbounds for (leaf, mmdg) in solutions
+        w = mean(truth.value for truth in mmdg)
+        weighted_sum += leaf.label * w
+        total_weight += w
+    end
+
+    if iszero(total_weight)
+        return mean(leaf.label for (leaf, _) in solutions)
+    end
+
+    return weighted_sum / total_weight
+end
+
+function apply(
     tree::ManyExpertDecisionTree{S, T}, 
     MXA::ManyExpertAlgebra, 
     instance::AbstractVector; 
