@@ -54,6 +54,7 @@ function apply(
     apply(tree, MXA, instance; depth=depth)
 end
 
+# Apply for regression trees
 function apply(
     tree::ManyExpertDecisionTree{S, T},
     MXA::ManyExpertAlgebra,
@@ -154,6 +155,7 @@ function apply(
     return weighted_sum / total_weight
 end
 
+# Apply for classification trees
 function apply(
     tree::ManyExpertDecisionTree{S, T}, 
     MXA::ManyExpertAlgebra, 

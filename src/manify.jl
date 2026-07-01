@@ -1,7 +1,3 @@
-using DecisionTree
-using DataFrames
-import FuzzyLogic as FL
-
 """
     function manify(
         dt::DecisionTree.Root{S, T}, 
@@ -16,7 +12,7 @@ N membership functions per node, parameterized from subdivisions of X.
 function manify(
     dt::DecisionTree.Root, 
     X::AbstractMatrix{S}, 
-    experts::UnionAll...;
+    experts::Type{<:AbstractMembershipFunction}...;
     kwargs...
 )::ManyExpertDecisionTree where {S}
 
@@ -24,13 +20,15 @@ function manify(
     length(experts) > 0 || throw(ArgumentError("At least one expert must be provided"))
 
     expertsdata = subdivide(length(experts), X)
-    root = build_medt(dt.node, experts, expertsdata; kwargs...)
+    hparams = ntuple(i -> initHyperParameters(experts[i]; kwargs...), length(experts))
 
+    root = _build_medt(dt.node, experts, expertsdata, hparams)
+    
     if root isa MEDTLeaf
-        return ManyExpertDecisionTree{S, typeof(root.label)}(root, size(X, 2), experts...)
+        return ManyExpertDecisionTree{S, typeof(root.label)}(root, size(X, 2), collect(experts), collect(hparams))
     end
 
-    return ManyExpertDecisionTree(root, size(X, 2), experts...)
+    return ManyExpertDecisionTree(root, size(X, 2), collect(experts), collect(hparams))
 end
 
 """
@@ -47,48 +45,55 @@ a single expert.
 function fuzzify(
     dt::DecisionTree.Root,
     X::AbstractMatrix{S}, 
-    expert::UnionAll; 
+    expert::Type{<:AbstractMembershipFunction};
     kwargs...
 ) where {S}
     return manify(dt, X, expert; kwargs...)
 end
 
 
-function build_medt(
+function _build_medt(
     node::DecisionTree.Leaf,
     experts::NTuple{N,UnionAll}, 
-    expertsdata::NTuple{N,AbstractMatrix{S}};
-    kwargs...
+    expertsdata::NTuple{N,AbstractMatrix{S}},
+    hparams::NTuple{N, Ref{<:AbstractHyperParameters}}
 ) where {N,S}
-
     return MEDTLeaf(node.majority)
 end
 
-function build_medt(
+function _build_medt(
     node::DecisionTree.Node, 
-    experts::NTuple{N,UnionAll}, 
-    expertsdata::NTuple{N,AbstractMatrix{S}};
-    kwargs...
+    experts::NTuple{N, UnionAll}, 
+    expertsdata::NTuple{N, AbstractMatrix{S}},
+    hparams::NTuple{N, Ref{<:AbstractHyperParameters}}
 ) where {N,S}
     
     split_val = convert(Float64, node.featval)
 
-    # Calculate MFs and get split datasets for each expert
-    results = ntuple(i -> build_mfs(experts[i], node.featid, split_val, expertsdata[i]; kwargs...), N)
+    # Calculate MFs and get split datasets for each expert.
+    results = ntuple(
+        i -> build_mfs(
+            experts[i],
+            node.featid, 
+            split_val, 
+            expertsdata[i], 
+            hparams[i]
+            ), N)
 
     # Unpack results
-    mfleft = FL.AbstractMembershipFunction[r[1] for r in results]
-    mfright = FL.AbstractMembershipFunction[r[2] for r in results]
+    mfleft = [r[1] for r in results]
+    mfright = [r[2] for r in results]
+
     left_expertsdata = ntuple(i -> results[i][3], N)
     right_expertsdata = ntuple(i -> results[i][4], N)
 
     return MEDTNode(
         split_val, 
         node.featid, 
+        _build_medt(node.left, experts, left_expertsdata, hparams),
+        _build_medt(node.right, experts, right_expertsdata, hparams),
         mfleft, 
-        mfright,
-        build_medt(node.left, experts, left_expertsdata; kwargs...),
-        build_medt(node.right, experts, right_expertsdata; kwargs...)
+        mfright
     )
 end
 

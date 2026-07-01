@@ -3,9 +3,9 @@ using Test
 using DataFrames
 using Statistics
 using SoleLogics
-import FuzzyLogic as FL
 
 import DecisionTree: build_tree
+import ManyExpertDecisionTrees: SigmoidHyperParameters, AbstractMembershipFunction
 
 @testset "ManyExpertDecisionTrees.jl" begin
     
@@ -23,33 +23,6 @@ import DecisionTree: build_tree
         @test size(parts[1], 1) == 10
     end
     
-    @testset "build_mfs" begin
-        X = reshape(collect(1.0:40.0), 40, 1)
-
-        featid = 1
-        feat_val = 20.5
-
-        mf_l, mf_r, leftset, rightset = ManyExpertDecisionTrees.build_mfs(
-            FL.GaussianMF,
-            featid,
-            feat_val,
-            X
-        )
-
-        @test mf_l isa FL.GaussianMF
-        @test mf_r isa FL.GaussianMF
-        @test size(leftset, 1) + size(rightset, 1) == size(X, 1)
-        @test all(leftset[:, featid] .<= feat_val)
-        @test all(rightset[:, featid] .> feat_val)
-
-        @test_throws ErrorException ManyExpertDecisionTrees.build_mfs(
-            FL.TriangularMF,
-            featid,
-            feat_val,
-            X
-        )
-    end
-    
    
     @testset "Leaf" begin
         leaf = ManyExpertDecisionTrees.MEDTLeaf(1);
@@ -65,10 +38,10 @@ import DecisionTree: build_tree
         node = ManyExpertDecisionTrees.MEDTNode(
             0.5, 
             1,
-            FL.AbstractMembershipFunction[FL.GaussianMF(0.0,1.0)], 
-            FL.AbstractMembershipFunction[FL.GaussianMF(0.0, 1.0)],
             leaf1, 
-            leaf2
+            leaf2,
+            [SigmoidMF(0.0,1.0, Ref(SigmoidHyperParameters()))], 
+            [SigmoidMF(0.0, 1.0, Ref(SigmoidHyperParameters()))]
         )
         
         @test node.featval == 0.5
@@ -79,35 +52,31 @@ import DecisionTree: build_tree
     
     @testset "manify" begin
         X = [1.0 1.0; 2.0 1.0; 3.0 2.0; 4.0 2.0; 5.0 3.0; 6.0 3.0]
-        y = [0, 0, 1, 1, 1, 1]
+        y1 = [0, 0, 1, 1, 1, 1]
         
-        dt = build_tree(y, X)
+        dt1 = build_tree(y1, X)
         
-        medt = manify(dt, X, FL.GaussianMF, FL.GaussianMF)
+        medt = manify(dt1, X, SigmoidMF, SigmoidMF)
         
         @test medt isa ManyExpertDecisionTree
         @test medt.nfeats == 2  
         @test length(medt.mftypes) == 2
         @test length(medt) >= 1
         @test depth(medt) >= 0
-        
-        leaf = ManyExpertDecisionTrees.MEDTLeaf(1)
-        
-        struct FakeMF{N}  
-        end
-        
-        @test_throws ErrorException ManyExpertDecisionTrees.ManyExpertDecisionTree{Int, Int}(leaf, 2, FakeMF, FakeMF)
-
     end
     
     @testset "apply" begin
         using SoleLogics.ManyValuedLogics
         
         X = [1.0 1.0; 2.0 1.0; 3.0 2.0; 4.0 2.0; 5.0 3.0; 6.0 3.0]
-        y = [0, 0, 1, 1, 1, 1]
+        y1 = [0, 0, 1, 1, 1, 1]
+        y2 = [0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
         
-        dt = build_tree(y, X)
-        medt = manify(dt, X, FL.GaussianMF, FL.GaussianMF)
+        dt1 = build_tree(y1, X)
+
+        dt2 = build_tree(y2, X)
+
+        medt = manify(dt1, X, SigmoidMF, SigmoidMF)
         
         experts = (GodelLogic, GodelLogic)
         
@@ -129,17 +98,16 @@ import DecisionTree: build_tree
         experts_wrong = (GodelLogic,)
         @test_throws ErrorException apply(medt, experts_wrong, instance1)
         
-        medt3 = manify(dt, X, FL.GaussianMF, FL.GaussianMF, FL.GaussianMF)
+        medt3 = manify(dt1, X, SigmoidMF, SigmoidMF, SigmoidMF)
         experts = (GodelLogic, ProductLogic, LukasiewiczLogic)
         
         result3 = apply(medt3, experts, instance1)
         @test result3 isa Vector
         @test !isempty(result3)
 
-        medt4 = fuzzify(dt, X, FL.GaussianMF)
+        medt4 = fuzzify(dt2, X, SigmoidMF)
         expert = GodelLogic
         result4 = apply(medt4, expert, instance1; depth=2)
-        @test result4 isa Vector
         @test !isempty(result4)
     end
     

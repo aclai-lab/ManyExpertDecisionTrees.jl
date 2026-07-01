@@ -206,6 +206,22 @@ function getstats(
     return ClassStats(TP, FP, TN, FN, vagueness)
 end
 
+# Regression metrics
+function mse(actual, predicted)
+    @assert length(actual) == length(predicted)
+   
+    return mean((actual - predicted) .^ 2)
+end
+
+function R2(actual, predicted)
+    @assert length(actual) == length(predicted)
+    
+    ss_res = sum((actual - predicted) .^ 2)
+    ss_tot = sum((actual .- mean(actual)) .^ 2)
+
+    return 1.0 - ss_res / ss_tot
+end
+
 # Single class Metrics
 accuracy(stats::ClassStats)    = (stats.TP + stats.FP + stats.TN + stats.FN) == 0 ? 0.0 : (stats.TP + stats.TN) / (stats.TP + stats.TN + stats.FP + stats.FN)
 precision(stats::ClassStats)   = (stats.TP + stats.FP) == 0 ? 0.0 : stats.TP / (stats.TP + stats.FP)
